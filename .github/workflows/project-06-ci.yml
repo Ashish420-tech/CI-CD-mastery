@@ -1,0 +1,51 @@
+name: Project 06 - CI
+
+on:
+  push:
+    branches:
+      - project-06-environments-deployment-gates
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Test Application
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: project-06-environments-deployment-gates
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pytest
+        run: python -m pip install pytest
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Generate deployment candidate
+        run: |
+          rm -rf deployment-candidate
+          mkdir -p deployment-candidate
+
+          python app.py > deployment-candidate/application-output.txt
+
+          cat > deployment-candidate/version.txt <<EOF_VERSION
+          Application Version: 1.0.0
+          EOF_VERSION
+
+          cat > deployment-candidate/deployment-status.txt <<EOF_STATUS
+          Deployment Candidate: READY
+          EOF_STATUS
+
+          echo "Deployment candidate generated:"
+          find deployment-candidate -type f -maxdepth 1 -print
