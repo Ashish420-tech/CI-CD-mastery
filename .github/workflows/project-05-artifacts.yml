@@ -37,3 +37,8 @@ jobs:
         run: |
           ls -l test-result.txt
           cat test-result.txt
+      - name: Upload test result
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-result
+          path: test-result.txt
