@@ -59,7 +59,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: python-test-artifacts
-          path: artifacts/
+          path: does-not-exist.txt
           retention-days: 7
 
   verify-artifact:
