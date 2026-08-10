@@ -61,3 +61,27 @@ jobs:
           name: python-test-artifacts
           path: artifacts/
           retention-days: 7
+
+  verify-artifact:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download test artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: python-test-artifacts
+          path: downloaded-artifacts
+
+      - name: Verify downloaded artifacts
+        run: |
+          find downloaded-artifacts -type f -maxdepth 1 -print
+
+          echo "----- test-result.txt -----"
+          cat downloaded-artifacts/test-result.txt
+
+          echo "----- environment.txt -----"
+          cat downloaded-artifacts/environment.txt
+
+          echo "----- summary.txt -----"
+          cat downloaded-artifacts/summary.txt
