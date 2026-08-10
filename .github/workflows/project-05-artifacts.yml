@@ -27,18 +27,36 @@ jobs:
       - name: Run tests
         run: pytest -v project-05-ci-artifacts/test_app.py
 
+      - name: Generate test artifacts
+        run: |
+          mkdir -p artifacts
 
-      - name: Generate test result
+          echo "CI Test Result" > artifacts/test-result.txt
+          echo "Python Version: $(python --version)" >> artifacts/test-result.txt
+          echo "Test Status: PASS" >> artifacts/test-result.txt
+
+          echo "Python Version: $(python --version)" > artifacts/environment.txt
+          echo "Runner OS: $(uname -s)" >> artifacts/environment.txt
+
+          echo "Project: Project 05 - CI Artifacts" > artifacts/summary.txt
+          echo "Test Status: PASS" >> artifacts/summary.txt
+          echo "Artifact Files: 3" >> artifacts/summary.txt
+
+      - name: Verify test artifacts
         run: |
-          echo "CI Test Result" > test-result.txt
-          echo "Python Version: $(python --version)" >> test-result.txt
-          echo "Test Status: PASS" >> test-result.txt
-      - name: Verify test result file
-        run: |
-          ls -l test-result.txt
-          cat test-result.txt
-      - name: Upload test result
+          find artifacts -type f -maxdepth 1 -print
+
+          echo "----- test-result.txt -----"
+          cat artifacts/test-result.txt
+
+          echo "----- environment.txt -----"
+          cat artifacts/environment.txt
+
+          echo "----- summary.txt -----"
+          cat artifacts/summary.txt
+
+      - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: test-result
-          path: test-result.txt
+          name: python-test-artifacts
+          path: artifacts/
