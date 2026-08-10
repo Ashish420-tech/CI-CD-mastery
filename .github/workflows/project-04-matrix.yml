@@ -26,4 +26,4 @@ jobs:
         run: pip install pytest
 
       - name: Run tests
-        run: pytest -v
+        run: pytest -v project-04-matrix-ci/test_app.py
