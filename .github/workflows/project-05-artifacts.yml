@@ -26,3 +26,14 @@ jobs:
 
       - name: Run tests
         run: pytest -v project-05-ci-artifacts/test_app.py
+
+
+      - name: Generate test result
+        run: |
+          echo "CI Test Result" > test-result.txt
+          echo "Python Version: $(python --version)" >> test-result.txt
+          echo "Test Status: PASS" >> test-result.txt
+      - name: Verify test result file
+        run: |
+          ls -l test-result.txt
+          cat test-result.txt
