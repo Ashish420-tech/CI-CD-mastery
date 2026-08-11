@@ -3,6 +3,7 @@ FROM python:3.12-slim
 LABEL org.opencontainers.image.title="CI/CD Mastery Project 08"
 LABEL org.opencontainers.image.description="Docker image registry and publishing demonstration"
 LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.source="https://github.com/Ashish420-tech/CI-CD-mastery"
 
 WORKDIR /app
 
