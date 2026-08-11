@@ -1,0 +1,64 @@
+name: Project 07 - Docker Image CI
+
+on:
+  push:
+    branches:
+      - project-07-docker-image-ci
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  docker-ci:
+    name: Test, Build and Validate Container
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: project-07-docker-image-ci
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependency
+        run: python -m pip install pytest
+
+      - name: Run unit tests
+        run: python -m pytest -v
+
+      - name: Get Git SHA
+        id: git
+        working-directory: .
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg APP_VERSION=1.0.0 \
+            --build-arg VCS_REF=${{ steps.git.outputs.sha }} \
+            -t project-07-app:1.0.0 \
+            -t project-07-app:${{ steps.git.outputs.sha }} \
+            .
+
+      - name: Validate image metadata
+        run: |
+          docker image inspect project-07-app:1.0.0 \
+            --format='Version={{index .Config.Labels "org.opencontainers.image.version"}} Revision={{index .Config.Labels "org.opencontainers.image.revision"}}'
+
+      - name: Validate container
+        run: |
+          docker run --name project-07-container-test \
+            project-07-app:1.0.0 > container-output.txt
+
+          cat container-output.txt
+
+          grep -q "Application Version: 1.0.0" container-output.txt
+          grep -q "Environment: development" container-output.txt
+
+          docker rm project-07-container-test
