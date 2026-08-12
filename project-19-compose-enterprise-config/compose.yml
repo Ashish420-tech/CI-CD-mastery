@@ -1,0 +1,63 @@
+services:
+
+  api:
+    build:
+      context: .
+    image: ci-cd-mastery-project-19:1.0.0
+    container_name: project-19-api
+
+    ports:
+      - "${API_PORT}:5000"
+
+    environment:
+      APP_NAME: "${APP_NAME}"
+      APP_VERSION: "${APP_VERSION}"
+      ENVIRONMENT: "${ENVIRONMENT}"
+      LOG_LEVEL: "${LOG_LEVEL}"
+
+      REDIS_HOST: "${REDIS_HOST}"
+      REDIS_PORT: "${REDIS_PORT}"
+
+      FEATURE_COUNTER: "${FEATURE_COUNTER}"
+
+    depends_on:
+      redis:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=2)"
+        ]
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: project-19-redis
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "ping"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+    restart: unless-stopped
+
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:
