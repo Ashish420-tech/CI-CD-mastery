@@ -1,0 +1,110 @@
+name: Project 31 - Docker Observability
+
+on:
+  push:
+    branches:
+      - project-31-docker-observability
+  pull_request:
+    branches:
+      - project-31-docker-observability
+
+jobs:
+  test:
+    name: Docker Observability Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest PyYAML
+
+      - name: Run tests
+        working-directory: project-31-docker-observability
+        run: pytest -q
+
+      - name: Validate Compose
+        working-directory: project-31-docker-observability
+        run: docker compose config
+
+      - name: Build application
+        working-directory: project-31-docker-observability
+        run: docker compose build app
+
+      - name: Start observability stack
+        working-directory: project-31-docker-observability
+        run: docker compose up -d
+
+      - name: Wait for application
+        working-directory: project-31-docker-observability
+        run: |
+          set -e
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:5001/health; then
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose logs
+          exit 1
+
+      - name: Verify application metrics
+        run: |
+          curl -fsS http://localhost:5001/metrics |
+            grep -q "application_requests_total"
+
+      - name: Wait for Prometheus
+        working-directory: project-31-docker-observability
+        run: |
+          set -e
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:9090/-/healthy; then
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose logs prometheus
+          exit 1
+
+      - name: Verify Prometheus targets
+        run: |
+          curl -fsS \
+            'http://localhost:9090/api/v1/targets' |
+            grep -q 'application'
+
+      - name: Verify cAdvisor
+        run: |
+          curl -fsS http://localhost:9091/metrics |
+            grep -q 'container_'
+
+      - name: Verify non-root
+        working-directory: project-31-docker-observability
+        run: |
+          test "$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{.Config.User}}')" = "10001:10001"
+
+      - name: Verify security
+        working-directory: project-31-docker-observability
+        run: |
+          docker inspect "$(docker compose ps -q app)" \
+            --format '{{json .HostConfig.SecurityOpt}}' |
+            grep -q "no-new-privileges:true"
+
+      - name: Cleanup
+        if: always()
+        working-directory: project-31-docker-observability
+        run: docker compose down -v
