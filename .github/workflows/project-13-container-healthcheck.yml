@@ -1,0 +1,91 @@
+name: Project 13 - Container Healthcheck
+
+on:
+  push:
+    branches:
+      - project-13-container-healthcheck
+    paths:
+      - 'project-13-container-healthcheck/**'
+      - '.github/workflows/project-13-container-healthcheck.yml'
+
+  pull_request:
+    branches:
+      - project-13-container-healthcheck
+    paths:
+      - 'project-13-container-healthcheck/**'
+      - '.github/workflows/project-13-container-healthcheck.yml'
+
+jobs:
+  container-healthcheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest flask
+
+      - name: Run tests
+        run: |
+          python -m pytest -q project-13-container-healthcheck
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ci-cd-mastery-project-13:1.0.0 \
+            ./project-13-container-healthcheck
+
+      - name: Run container
+        run: |
+          docker run -d \
+            --name project-13-app \
+            -p 8091:5000 \
+            ci-cd-mastery-project-13:1.0.0
+
+      - name: Wait for healthy container
+        run: |
+          for i in {1..20}; do
+            STATUS=$(docker inspect \
+              --format '{{.State.Health.Status}}' \
+              project-13-app)
+
+            echo "Health status: $STATUS"
+
+            if [ "$STATUS" = "healthy" ]; then
+              exit 0
+            fi
+
+            if [ "$STATUS" = "unhealthy" ]; then
+              docker logs project-13-app
+              docker inspect project-13-app
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          docker logs project-13-app
+          docker inspect project-13-app
+          exit 1
+
+      - name: Verify container state
+        run: |
+          docker inspect project-13-app \
+            --format 'status={{.State.Status}} health={{.State.Health.Status}}'
+
+      - name: Verify HTTP health endpoint
+        run: |
+          curl -fsS http://localhost:8091/health
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f project-13-app 2>/dev/null || true
