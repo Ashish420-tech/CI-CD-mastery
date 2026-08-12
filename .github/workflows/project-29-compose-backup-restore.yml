@@ -125,11 +125,29 @@ jobs:
 
           curl -fsS http://localhost:5001/data > /tmp/restored.json
 
-          grep -q '"id": 1' /tmp/restored.json
-          grep -q '"name": "backup-test"' /tmp/restored.json
-          grep -q '"environment": "production"' /tmp/restored.json
+          python - <<'PYTHON'
+          import json
 
-          cat /tmp/restored.json
+          with open("/tmp/restored.json") as handle:
+              data = json.load(handle)
+
+          assert data["application"] == "backup-restore"
+          assert data["version"] == 1
+
+          records = data["records"]
+
+          assert len(records) == 1
+
+          record = records[0]
+
+          assert record["id"] == 1
+          assert record["name"] == "backup-test"
+          assert record["environment"] == "production"
+
+          print("Restored data:")
+          print(json.dumps(data, indent=2))
+          print("RESTORE DATA VALIDATION: PASS")
+          PYTHON
 
       - name: Verify health after restore
         working-directory: project-29-compose-backup-restore

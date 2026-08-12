@@ -1,0 +1,42 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    ports:
+      - "5001:5000"
+
+    read_only: true
+
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges:true
+
+    restart: unless-stopped
+
+    init: true
+
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=2)"
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+    stop_grace_period: 10s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
