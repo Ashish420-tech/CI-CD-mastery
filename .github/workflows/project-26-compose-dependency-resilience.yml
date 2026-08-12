@@ -1,0 +1,128 @@
+name: Project 26 - Compose Dependency Resilience
+
+on:
+  push:
+    branches:
+      - project-26-compose-dependency-resilience
+  pull_request:
+    branches:
+      - project-26-compose-dependency-resilience
+
+jobs:
+  test:
+    name: Build Test and Verify Dependency Resilience
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest PyYAML
+
+      - name: Run pytest
+        working-directory: project-26-compose-dependency-resilience
+        run: pytest -q
+
+      - name: Validate Docker Compose
+        working-directory: project-26-compose-dependency-resilience
+        run: docker compose config
+
+      - name: Build Docker images
+        working-directory: project-26-compose-dependency-resilience
+        run: docker compose build
+
+      - name: Start Compose stack
+        working-directory: project-26-compose-dependency-resilience
+        run: docker compose up -d
+
+      - name: Show Compose status
+        working-directory: project-26-compose-dependency-resilience
+        run: docker compose ps
+
+      - name: Verify dependency health
+        working-directory: project-26-compose-dependency-resilience
+        run: |
+          set -e
+
+          for i in $(seq 1 30); do
+            STATUS="$(docker inspect \
+              "$(docker compose ps -q dependency)" \
+              --format '{{.State.Health.Status}}' 2>/dev/null || true)"
+
+            echo "Dependency health: ${STATUS}"
+
+            if [ "$STATUS" = "healthy" ]; then
+              echo "Dependency is healthy."
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          docker compose logs dependency
+          exit 1
+
+      - name: Verify application health
+        working-directory: project-26-compose-dependency-resilience
+        run: |
+          set -e
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:5001/health; then
+              echo
+              echo "Application is healthy."
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          docker compose logs
+          exit 1
+
+      - name: Verify application functionality
+        working-directory: project-26-compose-dependency-resilience
+        run: |
+          curl -fsS http://localhost:5001/
+          echo
+
+      - name: Verify dependency readiness
+        working-directory: project-26-compose-dependency-resilience
+        run: |
+          docker compose exec -T app \
+            python -c "import requests; r=requests.get('http://dependency:5000/health', timeout=5); assert r.ok; print(r.json())"
+
+      - name: Verify non-root execution
+        working-directory: project-26-compose-dependency-resilience
+        run: |
+          USER_ID="$(docker inspect \
+            "$(docker compose ps -q app)" \
+            --format '{{.Config.User}}')"
+
+          echo "Application container user: ${USER_ID}"
+
+          test "$USER_ID" = "10001:10001"
+
+      - name: Verify no-new-privileges
+        working-directory: project-26-compose-dependency-resilience
+        run: |
+          SECURITY_OPT="$(docker inspect \
+            "$(docker compose ps -q app)" \
+            --format '{{json .HostConfig.SecurityOpt}}')"
+
+          echo "Security options: ${SECURITY_OPT}"
+
+          echo "$SECURITY_OPT" | grep -q "no-new-privileges:true"
+
+      - name: Shutdown Compose stack
+        if: always()
+        working-directory: project-26-compose-dependency-resilience
+        run: docker compose down -v
