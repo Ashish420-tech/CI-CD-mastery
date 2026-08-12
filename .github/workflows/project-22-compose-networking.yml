@@ -48,6 +48,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          sed -i 's/^APP_PORT=.*/APP_PORT=8110/' .env
+
       - name: Validate Compose
         run: docker compose -f compose.yml config
 
