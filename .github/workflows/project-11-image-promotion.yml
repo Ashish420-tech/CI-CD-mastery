@@ -1,0 +1,79 @@
+name: Project 11 - Image Promotion
+
+on:
+  push:
+    branches:
+      - project-11-image-promotion
+    paths:
+      - 'project-11-image-promotion/**'
+      - '.github/workflows/project-11-image-promotion.yml'
+
+  pull_request:
+    paths:
+      - 'project-11-image-promotion/**'
+      - '.github/workflows/project-11-image-promotion.yml'
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: ci-cd-mastery-project-11
+
+jobs:
+  build-and-promote:
+    name: Build Once and Promote
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run tests
+        working-directory: project-11-image-promotion
+        run: |
+          python -m pip install --upgrade pytest
+          pytest -q
+
+      - name: Build artifact once
+        run: |
+          docker build \
+            -t "${IMAGE_NAME}:build" \
+            ./project-11-image-promotion
+
+      - name: Capture source artifact ID
+        id: source
+        run: |
+          IMAGE_ID=$(docker image inspect "${IMAGE_NAME}:build" --format '{{.Id}}')
+          echo "image_id=${IMAGE_ID}" >> "$GITHUB_OUTPUT"
+          echo "Built artifact: ${IMAGE_ID}"
+
+      - name: Promote to staging
+        run: |
+          docker tag \
+            "${IMAGE_NAME}:build" \
+            "${IMAGE_NAME}:staging"
+
+      - name: Promote to production
+        run: |
+          docker tag \
+            "${IMAGE_NAME}:build" \
+            "${IMAGE_NAME}:production"
+
+      - name: Verify same artifact
+        run: |
+          BUILD_ID=$(docker image inspect "${IMAGE_NAME}:build" --format '{{.Id}}')
+          STAGING_ID=$(docker image inspect "${IMAGE_NAME}:staging" --format '{{.Id}}')
+          PRODUCTION_ID=$(docker image inspect "${IMAGE_NAME}:production" --format '{{.Id}}')
+
+          echo "Build:      ${BUILD_ID}"
+          echo "Staging:    ${STAGING_ID}"
+          echo "Production: ${PRODUCTION_ID}"
+
+          test "${BUILD_ID}" = "${STAGING_ID}"
+          test "${BUILD_ID}" = "${PRODUCTION_ID}"
+
+          echo "PROMOTION VALIDATION: SAME ARTIFACT"
+
+      - name: Display promoted images
+        run: |
+          docker image ls "${IMAGE_NAME}"
