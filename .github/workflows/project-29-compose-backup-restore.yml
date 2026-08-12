@@ -1,0 +1,156 @@
+name: Project 29 - Compose Backup Restore
+
+on:
+  push:
+    branches:
+      - project-29-compose-backup-restore
+  pull_request:
+    branches:
+      - project-29-compose-backup-restore
+
+jobs:
+  test:
+    name: Backup and Restore Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest PyYAML
+
+      - name: Run pytest
+        working-directory: project-29-compose-backup-restore
+        run: pytest -q
+
+      - name: Validate Compose
+        working-directory: project-29-compose-backup-restore
+        run: docker compose config
+
+      - name: Build application
+        working-directory: project-29-compose-backup-restore
+        run: docker compose build
+
+      - name: Start application
+        working-directory: project-29-compose-backup-restore
+        run: docker compose up -d
+
+      - name: Verify health
+        working-directory: project-29-compose-backup-restore
+        run: |
+          set -e
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:5001/health; then
+              echo
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          docker compose logs
+          exit 1
+
+      - name: Write persistent data
+        working-directory: project-29-compose-backup-restore
+        run: |
+          curl -fsS \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"id":1,"name":"backup-test","environment":"production"}' \
+            http://localhost:5001/data
+
+          echo
+
+          curl -fsS http://localhost:5001/data
+          echo
+
+      - name: Create temporary backup
+        working-directory: project-29-compose-backup-restore
+        run: |
+          set -e
+
+          mkdir -p backups
+
+          docker run --rm \
+            -v project-29-backup-restore-data:/data:ro \
+            -v "$PWD/backups:/backup" \
+            alpine:3.22 \
+            tar -czf /backup/application-data.tar.gz -C /data .
+
+          test -s backups/application-data.tar.gz
+
+      - name: Verify backup contents
+        working-directory: project-29-compose-backup-restore
+        run: |
+          docker run --rm \
+            -v "$PWD/backups:/backup:ro" \
+            alpine:3.22 \
+            tar -tzf /backup/application-data.tar.gz
+
+      - name: Remove original application data
+        working-directory: project-29-compose-backup-restore
+        run: |
+          curl -fsS \
+            -X DELETE \
+            http://localhost:5001/data
+
+          echo
+
+          curl -fsS http://localhost:5001/data
+          echo
+
+      - name: Restore backup
+        working-directory: project-29-compose-backup-restore
+        run: |
+          docker run --rm \
+            -v project-29-backup-restore-data:/data \
+            -v "$PWD/backups:/backup:ro" \
+            alpine:3.22 \
+            sh -c 'rm -rf /data/* /data/.[!.]* 2>/dev/null || true; tar -xzf /backup/application-data.tar.gz -C /data'
+
+      - name: Validate restored data
+        working-directory: project-29-compose-backup-restore
+        run: |
+          set -e
+
+          curl -fsS http://localhost:5001/data > /tmp/restored.json
+
+          grep -q '"id": 1' /tmp/restored.json
+          grep -q '"name": "backup-test"' /tmp/restored.json
+          grep -q '"environment": "production"' /tmp/restored.json
+
+          cat /tmp/restored.json
+
+      - name: Verify health after restore
+        working-directory: project-29-compose-backup-restore
+        run: curl -fsS http://localhost:5001/health
+
+      - name: Verify non-root
+        working-directory: project-29-compose-backup-restore
+        run: |
+          test "$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{.Config.User}}')" = "10001:10001"
+
+      - name: Verify security
+        working-directory: project-29-compose-backup-restore
+        run: |
+          docker inspect "$(docker compose ps -q app)" \
+            --format '{{json .HostConfig.SecurityOpt}}' |
+            grep -q "no-new-privileges:true"
+
+      - name: Cleanup
+        if: always()
+        working-directory: project-29-compose-backup-restore
+        run: |
+          docker compose down -v
+          rm -rf backups
