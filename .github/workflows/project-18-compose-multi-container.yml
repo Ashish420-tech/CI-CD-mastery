@@ -1,0 +1,127 @@
+name: Project 18 - Compose Multi Container
+
+on:
+  push:
+    branches:
+      - project-18-compose-multi-container
+    paths:
+      - 'project-18-compose-multi-container/**'
+      - '.github/workflows/project-18-compose-multi-container.yml'
+
+  pull_request:
+    branches:
+      - project-18-compose-multi-container
+    paths:
+      - 'project-18-compose-multi-container/**'
+      - '.github/workflows/project-18-compose-multi-container.yml'
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r project-18-compose-multi-container/requirements.txt
+
+      - name: Run tests
+        run: |
+          python -m pytest -q project-18-compose-multi-container
+
+      - name: Validate Compose configuration
+        run: |
+          docker compose \
+            -f project-18-compose-multi-container/compose.yml \
+            config
+
+      - name: Build and start Compose stack
+        run: |
+          docker compose \
+            -f project-18-compose-multi-container/compose.yml \
+            up -d --build
+
+      - name: Show Compose services
+        run: |
+          docker compose \
+            -f project-18-compose-multi-container/compose.yml \
+            ps
+
+      - name: Wait for API health
+        run: |
+          for i in {1..30}; do
+            STATUS=$(docker inspect \
+              --format '{{.State.Health.Status}}' \
+              project-18-api 2>/dev/null || true)
+
+            echo "API health: $STATUS"
+
+            if [ "$STATUS" = "healthy" ]; then
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          docker compose \
+            -f project-18-compose-multi-container/compose.yml \
+            logs
+
+          exit 1
+
+      - name: Verify Redis health
+        run: |
+          STATUS=$(docker inspect \
+            --format '{{.State.Health.Status}}' \
+            project-18-redis)
+
+          echo "Redis health: $STATUS"
+
+          test "$STATUS" = "healthy"
+
+      - name: Verify API health endpoint
+        run: |
+          curl -fsS http://localhost:8096/health
+
+      - name: Verify Redis connectivity
+        run: |
+          RESPONSE=$(curl -fsS http://localhost:8096/health)
+
+          echo "$RESPONSE"
+
+          echo "$RESPONSE" | grep -q '"redis":"healthy"'
+
+      - name: Verify counter
+        run: |
+          RESPONSE=$(curl -fsS http://localhost:8096/counter)
+
+          echo "$RESPONSE"
+
+          echo "$RESPONSE" | grep -q '"counter":1'
+
+      - name: Verify Compose network
+        run: |
+          docker inspect project-18-api \
+            --format '{{json .NetworkSettings.Networks}}'
+
+      - name: Show logs
+        if: always()
+        run: |
+          docker compose \
+            -f project-18-compose-multi-container/compose.yml \
+            logs --tail 50
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose \
+            -f project-18-compose-multi-container/compose.yml \
+            down -v
