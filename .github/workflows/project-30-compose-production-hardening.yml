@@ -112,12 +112,29 @@ jobs:
       - name: Verify healthcheck
         working-directory: project-30-compose-production-hardening
         run: |
-          STATUS="$(docker inspect "$(docker compose ps -q app)" \
-            --format '{{.State.Health.Status}}')"
+          set -e
 
-          echo "Health=${STATUS}"
+          for i in $(seq 1 30); do
+            STATUS="$(docker inspect "$(docker compose ps -q app)"               --format '{{.State.Health.Status}}' 2>/dev/null || true)"
 
-          test "$STATUS" = "healthy"
+            echo "Health=${STATUS}"
+
+            if [ "$STATUS" = "healthy" ]; then
+              echo "Healthcheck: PASS"
+              exit 0
+            fi
+
+            if [ "$STATUS" = "unhealthy" ]; then
+              docker compose logs
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          docker compose logs
+          echo "Healthcheck timeout"
+          exit 1
 
       - name: Verify logging rotation
         working-directory: project-30-compose-production-hardening
