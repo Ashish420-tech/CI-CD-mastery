@@ -34,7 +34,7 @@ jobs:
       - name: Run tests
         working-directory: project-12-container-deployment
         run: |
-          python -m pip install --upgrade pytest
+          python -m pip install --upgrade pytest flask
           pytest -q
 
       - name: Build Docker image
