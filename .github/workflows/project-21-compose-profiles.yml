@@ -1,0 +1,184 @@
+name: Project 21 - Compose Profiles
+
+on:
+  push:
+    branches:
+      - project-21-compose-profiles
+    paths:
+      - 'project-21-compose-profiles/**'
+      - '.github/workflows/project-21-compose-profiles.yml'
+
+  pull_request:
+    branches:
+      - project-21-compose-profiles
+    paths:
+      - 'project-21-compose-profiles/**'
+      - '.github/workflows/project-21-compose-profiles.yml'
+
+jobs:
+  compose-profiles:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r project-21-compose-profiles/requirements.txt
+
+      - name: Run tests
+        run: |
+          python -m pytest -q project-21-compose-profiles
+
+      - name: Create CI environment
+        working-directory: project-21-compose-profiles
+        run: |
+          cp .env.example .env
+          mkdir -p secrets
+          printf 'ci-secret-value\n' > secrets/app_secret.txt
+
+      - name: Verify local configuration is ignored
+        working-directory: project-21-compose-profiles
+        run: |
+          git check-ignore -q .env
+          git check-ignore -q secrets/app_secret.txt
+
+      - name: Validate default Compose configuration
+        working-directory: project-21-compose-profiles
+        run: |
+          docker compose config
+
+      - name: Validate development profile
+        working-directory: project-21-compose-profiles
+        run: |
+          docker compose --profile dev config
+
+      - name: Validate debug profile
+        working-directory: project-21-compose-profiles
+        run: |
+          docker compose --profile debug config
+
+      - name: Build and start default stack
+        working-directory: project-21-compose-profiles
+        run: |
+          docker compose up -d --build
+
+      - name: Verify default services
+        run: |
+          docker ps --format '{{.Names}}' | grep -q '^project-21-api$'
+          docker ps --format '{{.Names}}' | grep -q '^project-21-redis$'
+
+          if docker ps --format '{{.Names}}' | grep -q '^project-21-adminer$'; then
+            echo "Adminer must not run in default profile"
+            exit 1
+          fi
+
+          if docker ps --format '{{.Names}}' | grep -q '^project-21-redis-insight$'; then
+            echo "RedisInsight must not run in default profile"
+            exit 1
+          fi
+
+      - name: Wait for API health
+        run: |
+          for i in {1..30}; do
+            STATUS=$(docker inspect \
+              --format '{{.State.Health.Status}}' \
+              project-21-api 2>/dev/null || true)
+
+            echo "API health: $STATUS"
+
+            if [ "$STATUS" = "healthy" ]; then
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          docker logs project-21-api
+          exit 1
+
+      - name: Verify default application
+        run: |
+          curl -fsS http://localhost:8099/health
+          curl -fsS http://localhost:8099/secret-status
+          curl -fsS http://localhost:8099/counter
+
+      - name: Test development profile
+        working-directory: project-21-compose-profiles
+        run: |
+          docker compose down -v --remove-orphans
+          docker compose --profile dev up -d
+
+          for i in {1..30}; do
+            if docker ps --format '{{.Names}}' | grep -q '^project-21-redis-insight$'; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose ps
+          exit 1
+
+      - name: Test debug profile
+        working-directory: project-21-compose-profiles
+        run: |
+          docker compose down -v --remove-orphans
+          docker compose --profile debug up -d
+
+          for i in {1..30}; do
+            if docker ps --format '{{.Names}}' | grep -q '^project-21-adminer$'; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose ps
+          exit 1
+
+      - name: Test both profiles
+        working-directory: project-21-compose-profiles
+        run: |
+          docker compose down -v --remove-orphans
+          docker compose --profile dev --profile debug up -d
+
+          for i in {1..30}; do
+            DEV_OK=false
+            DEBUG_OK=false
+
+            docker ps --format '{{.Names}}' | grep -q '^project-21-redis-insight$' && DEV_OK=true
+            docker ps --format '{{.Names}}' | grep -q '^project-21-adminer$' && DEBUG_OK=true
+
+            if [ "$DEV_OK" = true ] && [ "$DEBUG_OK" = true ]; then
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          docker compose ps
+          exit 1
+
+      - name: Show services
+        if: always()
+        working-directory: project-21-compose-profiles
+        run: |
+          docker compose ps
+
+      - name: Show logs
+        if: always()
+        working-directory: project-21-compose-profiles
+        run: |
+          docker compose logs --tail 50
+
+      - name: Cleanup
+        if: always()
+        working-directory: project-21-compose-profiles
+        run: |
+          docker compose down -v --remove-orphans
