@@ -35,49 +35,70 @@ jobs:
         working-directory: project-27-compose-resource-governance
         run: docker compose config
 
-      - name: Build
+      - name: Build Docker image
         working-directory: project-27-compose-resource-governance
         run: docker compose build
 
-      - name: Start
+      - name: Start application
         working-directory: project-27-compose-resource-governance
         run: docker compose up -d
 
-      - name: Verify health
+      - name: Verify application health
         working-directory: project-27-compose-resource-governance
         run: |
+          set -e
+
           for i in $(seq 1 30); do
             if curl -fsS http://localhost:5001/health; then
               echo
+              echo "Application healthy."
               exit 0
             fi
             sleep 2
           done
+
           docker compose logs
           exit 1
 
-      - name: Verify application
-        working-directory: project-27-compose-resource-governance
-        run: curl -fsS http://localhost:5001/
-
-      - name: Verify resources
+      - name: Verify application functionality
         working-directory: project-27-compose-resource-governance
         run: |
-          docker inspect "$(docker compose ps -q app)" \
-            --format 'CPU={{.HostConfig.NanoCpus}} Memory={{.HostConfig.Memory}} User={{.Config.User}}'
+          curl -fsS http://localhost:5001/
+          echo
 
-          test "$(docker inspect "$(docker compose ps -q app)" \
-            --format '{{.HostConfig.NanoCpus}}')" = "500000000"
-
-          test "$(docker inspect "$(docker compose ps -q app)" \
-            --format '{{.HostConfig.Memory}}')" = "268435456"
-
-      - name: Verify security
+      - name: Verify CPU limit
         working-directory: project-27-compose-resource-governance
         run: |
-          test "$(docker inspect "$(docker compose ps -q app)" \
-            --format '{{.Config.User}}')" = "10001:10001"
+          CPU=$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{.HostConfig.NanoCpus}}')
 
+          echo "NanoCPUs=${CPU}"
+
+          test "$CPU" = "500000000"
+
+      - name: Verify memory limit
+        working-directory: project-27-compose-resource-governance
+        run: |
+          MEMORY=$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{.HostConfig.Memory}}')
+
+          echo "MemoryBytes=${MEMORY}"
+
+          test "$MEMORY" = "268435456"
+
+      - name: Verify non-root execution
+        working-directory: project-27-compose-resource-governance
+        run: |
+          USER_ID=$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{.Config.User}}')
+
+          echo "Container user=${USER_ID}"
+
+          test "$USER_ID" = "10001:10001"
+
+      - name: Verify no-new-privileges
+        working-directory: project-27-compose-resource-governance
+        run: |
           docker inspect "$(docker compose ps -q app)" \
             --format '{{json .HostConfig.SecurityOpt}}' |
             grep -q 'no-new-privileges:true'
