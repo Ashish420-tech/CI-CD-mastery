@@ -1,0 +1,164 @@
+name: Project 30 - Compose Production Hardening
+
+on:
+  push:
+    branches:
+      - project-30-compose-production-hardening
+  pull_request:
+    branches:
+      - project-30-compose-production-hardening
+
+jobs:
+  test:
+    name: Production Hardening Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest PyYAML
+
+      - name: Run pytest
+        working-directory: project-30-compose-production-hardening
+        run: pytest -q
+
+      - name: Validate Compose
+        working-directory: project-30-compose-production-hardening
+        run: docker compose config
+
+      - name: Build image
+        working-directory: project-30-compose-production-hardening
+        run: docker compose build
+
+      - name: Start application
+        working-directory: project-30-compose-production-hardening
+        run: docker compose up -d
+
+      - name: Verify health
+        working-directory: project-30-compose-production-hardening
+        run: |
+          set -e
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:5001/health; then
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose logs
+          exit 1
+
+      - name: Verify application
+        working-directory: project-30-compose-production-hardening
+        run: |
+          curl -fsS http://localhost:5001/
+          echo
+
+          curl -fsS http://localhost:5001/runtime
+          echo
+
+      - name: Verify non-root
+        working-directory: project-30-compose-production-hardening
+        run: |
+          USER_ID="$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{.Config.User}}')"
+
+          echo "User=${USER_ID}"
+
+          test "$USER_ID" = "10001:10001"
+
+      - name: Verify read-only filesystem
+        working-directory: project-30-compose-production-hardening
+        run: |
+          READ_ONLY="$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{.HostConfig.ReadonlyRootfs}}')"
+
+          echo "ReadonlyRootfs=${READ_ONLY}"
+
+          test "$READ_ONLY" = "true"
+
+      - name: Verify tmpfs
+        working-directory: project-30-compose-production-hardening
+        run: |
+          docker inspect "$(docker compose ps -q app)" \
+            --format '{{json .HostConfig.Tmpfs}}' |
+            grep -q '"/tmp"'
+
+      - name: Verify capabilities dropped
+        working-directory: project-30-compose-production-hardening
+        run: |
+          docker inspect "$(docker compose ps -q app)" \
+            --format '{{json .HostConfig.CapDrop}}' |
+            grep -q '"ALL"'
+
+      - name: Verify no-new-privileges
+        working-directory: project-30-compose-production-hardening
+        run: |
+          docker inspect "$(docker compose ps -q app)" \
+            --format '{{json .HostConfig.SecurityOpt}}' |
+            grep -q 'no-new-privileges:true'
+
+      - name: Verify healthcheck
+        working-directory: project-30-compose-production-hardening
+        run: |
+          STATUS="$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{.State.Health.Status}}')"
+
+          echo "Health=${STATUS}"
+
+          test "$STATUS" = "healthy"
+
+      - name: Verify logging rotation
+        working-directory: project-30-compose-production-hardening
+        run: |
+          DRIVER="$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{.HostConfig.LogConfig.Type}}')"
+
+          SIZE="$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{index .HostConfig.LogConfig.Config "max-size"}}')"
+
+          FILES="$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{index .HostConfig.LogConfig.Config "max-file"}}')"
+
+          echo "Driver=${DRIVER}"
+          echo "max-size=${SIZE}"
+          echo "max-file=${FILES}"
+
+          test "$DRIVER" = "json-file"
+          test "$SIZE" = "10m"
+          test "$FILES" = "3"
+
+      - name: Verify root filesystem is actually read-only
+        working-directory: project-30-compose-production-hardening
+        run: |
+          if docker exec "$(docker compose ps -q app)" \
+              sh -c 'touch /rootfs-write-test' 2>/dev/null; then
+            echo "ERROR: root filesystem is writable"
+            exit 1
+          fi
+
+          echo "Root filesystem write blocked: PASS"
+
+      - name: Verify tmpfs remains writable
+        working-directory: project-30-compose-production-hardening
+        run: |
+          docker exec "$(docker compose ps -q app)" \
+            sh -c 'touch /tmp/hardening-test && rm /tmp/hardening-test'
+
+          echo "tmpfs write: PASS"
+
+      - name: Cleanup
+        if: always()
+        working-directory: project-30-compose-production-hardening
+        run: docker compose down -v
