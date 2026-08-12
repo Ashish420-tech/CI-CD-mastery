@@ -1,0 +1,237 @@
+name: Project 14 - Container Resource Limits
+
+on:
+  push:
+    branches:
+      - project-14-container-resource-limits
+    paths:
+      - 'project-14-container-resource-limits/**'
+      - '.github/workflows/project-14-container-resource-limits.yml'
+
+  pull_request:
+    branches:
+      - project-14-container-resource-limits
+    paths:
+      - 'project-14-container-resource-limits/**'
+      - '.github/workflows/project-14-container-resource-limits.yml'
+
+jobs:
+  container-resource-limits:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest flask
+
+      - name: Run tests
+        run: |
+          python -m pytest -q project-14-container-resource-limits
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ci-cd-mastery-project-14:1.0.0 \
+            ./project-14-container-resource-limits
+
+      - name: Run container with resource limits
+        run: |
+          docker run -d \
+            --name project-14-app \
+            --memory=128m \
+            --cpus=0.5 \
+            --pids-limit=100 \
+            -p 8092:5000 \
+            ci-cd-mastery-project-14:1.0.0
+
+      - name: Wait for healthy container
+        run: |
+          for i in {1..20}; do
+            STATUS=$(docker inspect \
+              --format '{{.State.Health.Status}}' \
+              project-14-app)
+
+            echo "Health status: $STATUS"
+
+            if [ "$STATUS" = "healthy" ]; then
+              exit 0
+            fi
+
+            if [ "$STATUS" = "unhealthy" ]; then
+              docker logs project-14-app
+              docker inspect project-14-app
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          docker logs project-14-app
+          docker inspect project-14-app
+          exit 1
+
+      - name: Verify resource limits
+        run: |
+          MEMORY=$(docker inspect project-14-app \
+            --format '{{.HostConfig.Memory}}')
+
+          CPUS=$(docker inspect project-14-app \
+            --format '{{.HostConfig.NanoCpus}}')
+
+          PIDS=$(docker inspect project-14-app \
+            --format '{{.HostConfig.PidsLimit}}')
+
+          echo "Memory: $MEMORY"
+          echo "NanoCPUs: $CPUS"
+          echo "PIDs: $PIDS"
+
+          test "$MEMORY" -eq 134217728
+          test "$CPUS" -eq 500000000
+          test "$PIDS" -eq 100
+
+      - name: Verify container state
+        run: |
+          docker inspect project-14-app \
+            --format 'status={{.State.Status}} health={{.State.Health.Status}}'
+
+      - name: Verify HTTP health endpoint
+        run: |
+          curl -fsS http://localhost:8092/health
+
+      - name: Display resource usage
+        run: |
+          docker stats --no-stream project-14-app
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f project-14-app 2>/dev/null || true
+EOFmkdir -p .github/workflows
+
+cat > .github/workflows/project-14-container-resource-limits.yml <<'EOF'
+name: Project 14 - Container Resource Limits
+
+on:
+  push:
+    branches:
+      - project-14-container-resource-limits
+    paths:
+      - 'project-14-container-resource-limits/**'
+      - '.github/workflows/project-14-container-resource-limits.yml'
+
+  pull_request:
+    branches:
+      - project-14-container-resource-limits
+    paths:
+      - 'project-14-container-resource-limits/**'
+      - '.github/workflows/project-14-container-resource-limits.yml'
+
+jobs:
+  container-resource-limits:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest flask
+
+      - name: Run tests
+        run: |
+          python -m pytest -q project-14-container-resource-limits
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ci-cd-mastery-project-14:1.0.0 \
+            ./project-14-container-resource-limits
+
+      - name: Run container with resource limits
+        run: |
+          docker run -d \
+            --name project-14-app \
+            --memory=128m \
+            --cpus=0.5 \
+            --pids-limit=100 \
+            -p 8092:5000 \
+            ci-cd-mastery-project-14:1.0.0
+
+      - name: Wait for healthy container
+        run: |
+          for i in {1..20}; do
+            STATUS=$(docker inspect \
+              --format '{{.State.Health.Status}}' \
+              project-14-app)
+
+            echo "Health status: $STATUS"
+
+            if [ "$STATUS" = "healthy" ]; then
+              exit 0
+            fi
+
+            if [ "$STATUS" = "unhealthy" ]; then
+              docker logs project-14-app
+              docker inspect project-14-app
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          docker logs project-14-app
+          docker inspect project-14-app
+          exit 1
+
+      - name: Verify resource limits
+        run: |
+          MEMORY=$(docker inspect project-14-app \
+            --format '{{.HostConfig.Memory}}')
+
+          CPUS=$(docker inspect project-14-app \
+            --format '{{.HostConfig.NanoCpus}}')
+
+          PIDS=$(docker inspect project-14-app \
+            --format '{{.HostConfig.PidsLimit}}')
+
+          echo "Memory: $MEMORY"
+          echo "NanoCPUs: $CPUS"
+          echo "PIDs: $PIDS"
+
+          test "$MEMORY" -eq 134217728
+          test "$CPUS" -eq 500000000
+          test "$PIDS" -eq 100
+
+      - name: Verify container state
+        run: |
+          docker inspect project-14-app \
+            --format 'status={{.State.Status}} health={{.State.Health.Status}}'
+
+      - name: Verify HTTP health endpoint
+        run: |
+          curl -fsS http://localhost:8092/health
+
+      - name: Display resource usage
+        run: |
+          docker stats --no-stream project-14-app
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f project-14-app 2>/dev/null || true
