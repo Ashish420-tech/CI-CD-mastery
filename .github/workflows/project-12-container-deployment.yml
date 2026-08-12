@@ -1,0 +1,86 @@
+name: Project 12 - Container Deployment
+
+on:
+  push:
+    branches:
+      - project-12-container-deployment
+    paths:
+      - 'project-12-container-deployment/**'
+      - '.github/workflows/project-12-container-deployment.yml'
+
+  pull_request:
+    paths:
+      - 'project-12-container-deployment/**'
+      - '.github/workflows/project-12-container-deployment.yml'
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: ci-cd-mastery-project-12
+  CONTAINER_NAME: project-12-app
+  HOST_PORT: 8090
+  CONTAINER_PORT: 5000
+
+jobs:
+  deploy-and-validate:
+    name: Build Deploy and Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run tests
+        working-directory: project-12-container-deployment
+        run: |
+          python -m pip install --upgrade pytest flask
+          pytest -q
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t "${IMAGE_NAME}:1.0.0" \
+            ./project-12-container-deployment
+
+      - name: Deploy container
+        run: |
+          docker run -d \
+            --name "${CONTAINER_NAME}" \
+            -p "${HOST_PORT}:${CONTAINER_PORT}" \
+            "${IMAGE_NAME}:1.0.0"
+
+      - name: Validate container is running
+        run: |
+          STATUS=$(docker inspect "${CONTAINER_NAME}" \
+            --format '{{.State.Status}}')
+
+          echo "Container status: ${STATUS}"
+
+          test "${STATUS}" = "running"
+
+      - name: Validate HTTP endpoint
+        run: |
+          for i in {1..10}; do
+            if curl -fsS "http://localhost:${HOST_PORT}/health" >/dev/null; then
+              echo "HTTP deployment validation: PASS"
+              exit 0
+            fi
+
+            echo "Application not ready yet. Retry ${i}/10..."
+            sleep 2
+          done
+
+          echo "HTTP deployment validation: FAIL"
+          docker logs "${CONTAINER_NAME}"
+          exit 1
+
+      - name: Display container information
+        run: |
+          docker ps \
+            --filter "name=${CONTAINER_NAME}"
+
+      - name: Cleanup container
+        if: always()
+        run: |
+          docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
