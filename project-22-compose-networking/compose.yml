@@ -1,0 +1,104 @@
+services:
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: project22-api
+
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_TIMEOUT: 2
+      PORT: 5000
+
+    ports:
+      - "${APP_PORT:-8101}:5000"
+
+    networks:
+      frontend_net:
+        aliases:
+          - api
+          - project22-api
+
+      backend_net:
+        aliases:
+          - api
+          - project22-api
+
+    depends_on:
+      redis:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=2)"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+    security_opt:
+      - no-new-privileges:true
+
+    init: true
+
+  redis:
+    image: redis:7.4-alpine
+
+    container_name: project22-redis
+
+    restart: unless-stopped
+
+    command:
+      - redis-server
+      - --appendonly
+      - yes
+      - --save
+      - "60"
+      - "1"
+
+    networks:
+      backend_net:
+        aliases:
+          - redis
+          - project22-redis
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "ping"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+    security_opt:
+      - no-new-privileges:true
+
+    init: true
+
+networks:
+
+  frontend_net:
+    name: project22_frontend_net
+    driver: bridge
+
+  backend_net:
+    name: project22_backend_net
+    driver: bridge
+    internal: true
