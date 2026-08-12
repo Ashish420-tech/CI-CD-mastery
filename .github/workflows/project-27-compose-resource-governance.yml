@@ -1,0 +1,88 @@
+name: Project 27 - Compose Resource Governance
+
+on:
+  push:
+    branches:
+      - project-27-compose-resource-governance
+  pull_request:
+    branches:
+      - project-27-compose-resource-governance
+
+jobs:
+  test:
+    name: Resource Governance Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest PyYAML
+
+      - name: Run pytest
+        working-directory: project-27-compose-resource-governance
+        run: pytest -q
+
+      - name: Validate Compose
+        working-directory: project-27-compose-resource-governance
+        run: docker compose config
+
+      - name: Build
+        working-directory: project-27-compose-resource-governance
+        run: docker compose build
+
+      - name: Start
+        working-directory: project-27-compose-resource-governance
+        run: docker compose up -d
+
+      - name: Verify health
+        working-directory: project-27-compose-resource-governance
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:5001/health; then
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs
+          exit 1
+
+      - name: Verify application
+        working-directory: project-27-compose-resource-governance
+        run: curl -fsS http://localhost:5001/
+
+      - name: Verify resources
+        working-directory: project-27-compose-resource-governance
+        run: |
+          docker inspect "$(docker compose ps -q app)" \
+            --format 'CPU={{.HostConfig.NanoCpus}} Memory={{.HostConfig.Memory}} User={{.Config.User}}'
+
+          test "$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{.HostConfig.NanoCpus}}')" = "500000000"
+
+          test "$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{.HostConfig.Memory}}')" = "268435456"
+
+      - name: Verify security
+        working-directory: project-27-compose-resource-governance
+        run: |
+          test "$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{.Config.User}}')" = "10001:10001"
+
+          docker inspect "$(docker compose ps -q app)" \
+            --format '{{json .HostConfig.SecurityOpt}}' |
+            grep -q 'no-new-privileges:true'
+
+      - name: Cleanup
+        if: always()
+        working-directory: project-27-compose-resource-governance
+        run: docker compose down -v
