@@ -1,0 +1,126 @@
+name: Project 28 - Compose Logging Rotation
+
+on:
+  push:
+    branches:
+      - project-28-compose-logging-rotation
+  pull_request:
+    branches:
+      - project-28-compose-logging-rotation
+
+jobs:
+  test:
+    name: Logging and Rotation Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest PyYAML
+
+      - name: Run pytest
+        working-directory: project-28-compose-logging-rotation
+        run: pytest -q
+
+      - name: Validate Compose
+        working-directory: project-28-compose-logging-rotation
+        run: docker compose config
+
+      - name: Build image
+        working-directory: project-28-compose-logging-rotation
+        run: docker compose build
+
+      - name: Start application
+        working-directory: project-28-compose-logging-rotation
+        run: docker compose up -d
+
+      - name: Verify application health
+        working-directory: project-28-compose-logging-rotation
+        run: |
+          set -e
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:5001/health; then
+              echo
+              echo "Application healthy."
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          docker compose logs
+          exit 1
+
+      - name: Generate logs
+        working-directory: project-28-compose-logging-rotation
+        run: |
+          curl -fsS http://localhost:5001/generate-logs
+          echo
+
+      - name: Verify application logs
+        working-directory: project-28-compose-logging-rotation
+        run: |
+          docker logs "$(docker compose ps -q app)" 2>&1 |
+            grep -q "production log event"
+
+      - name: Verify logging driver
+        working-directory: project-28-compose-logging-rotation
+        run: |
+          DRIVER="$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{.HostConfig.LogConfig.Type}}')"
+
+          echo "Driver=${DRIVER}"
+
+          test "$DRIVER" = "json-file"
+
+      - name: Verify max-size
+        working-directory: project-28-compose-logging-rotation
+        run: |
+          VALUE="$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{index .HostConfig.LogConfig.Config "max-size"}}')"
+
+          echo "max-size=${VALUE}"
+
+          test "$VALUE" = "10m"
+
+      - name: Verify max-file
+        working-directory: project-28-compose-logging-rotation
+        run: |
+          VALUE="$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{index .HostConfig.LogConfig.Config "max-file"}}')"
+
+          echo "max-file=${VALUE}"
+
+          test "$VALUE" = "3"
+
+      - name: Verify non-root
+        working-directory: project-28-compose-logging-rotation
+        run: |
+          USER_ID="$(docker inspect "$(docker compose ps -q app)" \
+            --format '{{.Config.User}}')"
+
+          echo "User=${USER_ID}"
+
+          test "$USER_ID" = "10001:10001"
+
+      - name: Verify no-new-privileges
+        working-directory: project-28-compose-logging-rotation
+        run: |
+          docker inspect "$(docker compose ps -q app)" \
+            --format '{{json .HostConfig.SecurityOpt}}' |
+            grep -q "no-new-privileges:true"
+
+      - name: Cleanup
+        if: always()
+        working-directory: project-28-compose-logging-rotation
+        run: docker compose down -v
