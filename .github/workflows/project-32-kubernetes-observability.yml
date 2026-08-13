@@ -1,0 +1,107 @@
+name: Project 32 - Kubernetes Observability
+
+on:
+  push:
+    branches:
+      - project-32-kubernetes-observability
+  pull_request:
+    branches:
+      - project-32-kubernetes-observability
+
+jobs:
+  validate:
+    name: Kubernetes Observability Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest PyYAML
+
+      - name: Run tests
+        working-directory: project-32-kubernetes-observability
+        run: pytest -q
+
+      - name: Validate Kubernetes YAML
+        working-directory: project-32-kubernetes-observability
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          for path in Path("k8s").glob("*.yml"):
+              list(yaml.safe_load_all(path.read_text()))
+              print(f"VALID: {path}")
+          PY
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.19.2
+
+      - name: Add Helm repository
+        run: |
+          helm repo add prometheus-community \
+            https://prometheus-community.github.io/helm-charts
+          helm repo update
+
+      - name: Download pinned Helm chart
+        working-directory: project-32-kubernetes-observability
+        run: |
+          helm pull prometheus-community/kube-prometheus-stack \
+            --version 77.5.0 \
+            --untar \
+            --untardir /tmp/project-32-chart
+
+      - name: Helm lint
+        working-directory: project-32-kubernetes-observability
+        run: |
+          helm lint \
+            /tmp/project-32-chart/kube-prometheus-stack \
+            -f helm/values.yaml
+
+      - name: Helm template validation
+        working-directory: project-32-kubernetes-observability
+        run: |
+          helm template monitoring \
+            prometheus-community/kube-prometheus-stack \
+            --version 77.5.0 \
+            -n observability \
+            -f helm/values.yaml \
+            >/tmp/project-32-rendered.yaml
+
+          test -s /tmp/project-32-rendered.yaml
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.35.0
+
+      - name: Validate Kubernetes manifests
+        working-directory: project-32-kubernetes-observability
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          for manifest in sorted(Path("k8s").glob("*.yml")):
+              documents = list(yaml.safe_load_all(manifest.read_text()))
+              assert documents, f"No YAML documents found: {manifest}"
+
+              for document in documents:
+                  assert isinstance(document, dict), f"Invalid Kubernetes document: {manifest}"
+                  assert document.get("apiVersion"), f"Missing apiVersion: {manifest}"
+                  assert document.get("kind"), f"Missing kind: {manifest}"
+                  assert document.get("metadata", {}).get("name"), f"Missing metadata.name: {manifest}"
+
+              print(f"VALID: {manifest}")
+          PY

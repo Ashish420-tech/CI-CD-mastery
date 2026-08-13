@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: observability-app-config
+  namespace: observability
+data:
+  APP_ENV: "observability"
+  LOG_LEVEL: "INFO"
