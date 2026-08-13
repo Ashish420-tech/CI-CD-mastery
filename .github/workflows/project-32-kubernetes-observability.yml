@@ -54,11 +54,19 @@ jobs:
             https://prometheus-community.github.io/helm-charts
           helm repo update
 
+      - name: Download pinned Helm chart
+        working-directory: project-32-kubernetes-observability
+        run: |
+          helm pull prometheus-community/kube-prometheus-stack \
+            --version 77.5.0 \
+            --untar \
+            --untardir /tmp/project-32-chart
+
       - name: Helm lint
         working-directory: project-32-kubernetes-observability
         run: |
           helm lint \
-            prometheus-community/kube-prometheus-stack \
+            /tmp/project-32-chart/kube-prometheus-stack \
             -f helm/values.yaml
 
       - name: Helm template validation
