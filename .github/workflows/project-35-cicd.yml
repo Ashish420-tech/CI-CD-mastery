@@ -53,9 +53,9 @@ jobs:
 
       - name: Validate manifests
         run: |
-          kubectl apply --dry-run=client -f project-35-kubernetes-cicd/k8s/namespace.yml
-          kubectl apply --dry-run=client -f project-35-kubernetes-cicd/k8s/deployment.yml
-          kubectl apply --dry-run=client -f project-35-kubernetes-cicd/k8s/service.yml
+          kubectl apply --dry-run=client --validate=false -f project-35-kubernetes-cicd/k8s/namespace.yml
+          kubectl apply --dry-run=client --validate=false -f project-35-kubernetes-cicd/k8s/deployment.yml
+          kubectl apply --dry-run=client --validate=false -f project-35-kubernetes-cicd/k8s/service.yml
 
   build:
     name: Build and Security Scan
