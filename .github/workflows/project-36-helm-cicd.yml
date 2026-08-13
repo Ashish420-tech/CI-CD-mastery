@@ -183,4 +183,4 @@ jobs:
             --image=curlimages/curl:8.12.1 \
             -- \
             curl -fsS \
-            http://project-36-project-36-app.$NAMESPACE.svc.cluster.local/health
+            http://project-36.$NAMESPACE.svc.cluster.local/health
