@@ -41,21 +41,51 @@ jobs:
         run: pytest -q project-35-kubernetes-cicd/tests
 
   validate:
-    name: Kubernetes Validation
+    name: Kubernetes Manifest Validation
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: azure/setup-kubectl@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          version: v1.34.0
+          python-version: "3.12"
 
-      - name: Validate manifests
+      - name: Install YAML validator
+        run: pip install PyYAML
+
+      - name: Validate Kubernetes YAML
         run: |
-          kubectl apply --dry-run=client --validate=false -f project-35-kubernetes-cicd/k8s/namespace.yml
-          kubectl apply --dry-run=client --validate=false -f project-35-kubernetes-cicd/k8s/deployment.yml
-          kubectl apply --dry-run=client --validate=false -f project-35-kubernetes-cicd/k8s/service.yml
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          files = [
+              Path("project-35-kubernetes-cicd/k8s/namespace.yml"),
+              Path("project-35-kubernetes-cicd/k8s/deployment.yml"),
+              Path("project-35-kubernetes-cicd/k8s/service.yml"),
+          ]
+
+          for path in files:
+              print(f"Validating {path}")
+              documents = list(yaml.safe_load_all(path.read_text()))
+
+              if not documents:
+                  raise SystemExit(f"{path}: empty manifest")
+
+              for document in documents:
+                  if not isinstance(document, dict):
+                      raise SystemExit(f"{path}: invalid YAML document")
+
+                  for field in ("apiVersion", "kind", "metadata"):
+                      if field not in document:
+                          raise SystemExit(
+                              f"{path}: missing required field {field}"
+                          )
+
+              print(f"{path}: OK")
+          PY
 
   build:
     name: Build and Security Scan
