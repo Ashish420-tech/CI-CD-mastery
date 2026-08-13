@@ -82,9 +82,24 @@ jobs:
 
       - name: Verify Prometheus targets
         run: |
-          curl -fsS \
-            'http://localhost:9090/api/v1/targets' |
-            grep -q 'application'
+          set -e
+
+          for i in $(seq 1 30); do
+            RESPONSE="$(curl -fsS 'http://localhost:9090/api/v1/targets')"
+
+            echo "$RESPONSE"
+
+            if echo "$RESPONSE" |
+              grep -q '"job":"application".*"health":"up"'; then
+              echo "Application Prometheus target: UP"
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          echo "Application Prometheus target did not become UP."
+          exit 1
 
       - name: Verify cAdvisor
         run: |
