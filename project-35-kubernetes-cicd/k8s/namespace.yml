@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: project-35
+  labels:
+    project: project-35
+    purpose: cicd

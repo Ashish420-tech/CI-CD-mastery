@@ -1,0 +1,149 @@
+name: Project 35 - Kubernetes CI/CD
+
+on:
+  push:
+    branches:
+      - project-35-kubernetes-cicd
+  pull_request:
+    branches:
+      - project-35-kubernetes-cicd
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: ci-cd-mastery/applications
+  EKS_CLUSTER: ci-cd-mastery-eks
+  NAMESPACE: project-35
+  IMAGE_NAME: project-35-gateway
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r app/requirements.txt
+          pip install pytest
+
+      - name: Run tests
+        run: pytest -q
+
+  validate:
+    name: Kubernetes Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.34.0
+
+      - name: Validate manifests
+        run: |
+          kubectl apply --dry-run=client -f k8s/namespace.yml
+          kubectl apply --dry-run=client -f k8s/deployment.yml
+          kubectl apply --dry-run=client -f k8s/service.yml
+
+  build:
+    name: Build and Security Scan
+    needs:
+      - test
+      - validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t "$IMAGE_NAME:${GITHUB_SHA}" ./app
+
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: "$IMAGE_NAME:${{ github.sha }}"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  deploy:
+    name: Deploy to EKS
+    if: github.event_name == 'push'
+    needs:
+      - build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push immutable image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          IMAGE="$REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA"
+
+          docker build -t "$IMAGE" ./app
+          docker push "$IMAGE"
+
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig \
+            --region "$AWS_REGION" \
+            --name "$EKS_CLUSTER"
+
+      - name: Deploy namespace
+        run: kubectl apply -f k8s/namespace.yml
+
+      - name: Deploy application
+        run: |
+          sed "s|IMAGE_PLACEHOLDER|$IMAGE|g" \
+            k8s/deployment.yml \
+            | kubectl apply -f -
+
+          kubectl apply -f k8s/service.yml
+
+      - name: Verify rollout
+        run: |
+          kubectl rollout status \
+            deployment/project-35-gateway \
+            -n "$NAMESPACE" \
+            --timeout=180s
+
+          kubectl get deployment project-35-gateway -n "$NAMESPACE"
+          kubectl get pods -n "$NAMESPACE" -o wide
+
+      - name: Smoke test
+        run: |
+          kubectl run project-35-smoke \
+            -n "$NAMESPACE" \
+            --rm \
+            -i \
+            --restart=Never \
+            --image=curlimages/curl:8.12.1 \
+            -- \
+            curl -fsS \
+            http://project-35-gateway.$NAMESPACE.svc.cluster.local/health
