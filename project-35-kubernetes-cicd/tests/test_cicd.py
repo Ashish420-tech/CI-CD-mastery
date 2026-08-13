@@ -1,14 +1,19 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = ROOT.parent
 
 
 def test_workflow_exists():
-    assert (ROOT / ".github" / "workflows" / "project-35-cicd.yml").exists()
+    assert (
+        REPO_ROOT / ".github" / "workflows" / "project-35-cicd.yml"
+    ).exists()
 
 
 def test_workflow_uses_oidc():
-    text = (ROOT / ".github" / "workflows" / "project-35-cicd.yml").read_text()
+    text = (
+        REPO_ROOT / ".github" / "workflows" / "project-35-cicd.yml"
+    ).read_text()
 
     assert "id-token: write" in text
     assert "configure-aws-credentials" in text
@@ -16,7 +21,9 @@ def test_workflow_uses_oidc():
 
 
 def test_no_static_aws_credentials():
-    text = (ROOT / ".github" / "workflows" / "project-35-cicd.yml").read_text()
+    text = (
+        REPO_ROOT / ".github" / "workflows" / "project-35-cicd.yml"
+    ).read_text()
 
     assert "AWS_ACCESS_KEY_ID" not in text
     assert "AWS_SECRET_ACCESS_KEY" not in text
