@@ -1,399 +1,384 @@
-# Project 32 — Enterprise Kubernetes Observability
+# Project 33 — EKS Service Discovery Platform
 
-> Production-oriented Kubernetes observability platform using Prometheus, Grafana, kube-state-metrics, Node Exporter and application-native Prometheus metrics.
+Production-style Kubernetes service discovery platform deployed on Amazon EKS.
 
-## Executive Summary
+This project demonstrates how Kubernetes-native service discovery works using
+ClusterIP Services, CoreDNS, Kubernetes DNS names, an internal service layer,
+and an externally exposed gateway through an AWS Load Balancer.
 
-This project builds a Kubernetes observability foundation on Minikube.
+---
 
-The platform combines:
+## 🎯 Project Objective
 
-- Application metrics
-- Kubernetes object-state metrics
-- Node-level metrics
-- Prometheus collection
-- Grafana visualization
-- Kubernetes RBAC
-- Pod health probes
-- Resource governance
-- Non-root execution
-- Linux capability dropping
-- Seccomp RuntimeDefault
-- GitHub Actions validation
+Build and deploy a small microservice platform where:
 
-The project intentionally separates CI validation from Kubernetes runtime validation:
+- An external client reaches a gateway through an AWS Load Balancer.
+- The gateway discovers backend services using Kubernetes DNS.
+- Backend services remain internal using ClusterIP.
+- Kubernetes/CoreDNS provides service discovery.
+- Applications run as non-root containers.
+- Readiness and liveness probes protect availability.
+- Docker images are stored in Amazon ECR.
+- The complete platform runs on Amazon EKS.
+
+---
+
+## 🏗️ Architecture
 
 ```text
-GitHub Actions
-   |
-   +-- pytest
-   +-- YAML validation
-   +-- Helm lint
-   +-- Helm template
-   |
-   v
-CI validation
+                         Internet
+                            │
+                            ▼
+                 ┌─────────────────────┐
+                 │ AWS Load Balancer   │
+                 │     gateway :80     │
+                 └──────────┬──────────┘
+                            │
+                            ▼
+                 ┌─────────────────────┐
+                 │ Gateway Deployment  │
+                 │      2 replicas     │
+                 └──────────┬──────────┘
+                            │
+                  Kubernetes DNS
+                            │
+             ┌──────────────┴──────────────┐
+             │                             │
+             ▼                             ▼
+┌─────────────────────────┐   ┌─────────────────────────┐
+│ service-a               │   │ service-b               │
+│ ClusterIP :5000         │   │ ClusterIP :5000         │
+│ 2 replicas              │   │ 2 replicas              │
+└─────────────────────────┘   └─────────────────────────┘
+             │                             │
+             └──────────── EKS ────────────┘
+Kubernetes DNS
 
-Minikube
-   |
-   +-- Kubernetes deployment
-   +-- Prometheus
-   +-- Grafana
-   +-- kube-state-metrics
-   +-- Node Exporter
-   |
-   v
-Runtime observability
-Architecture
-                    Kubernetes Cluster
-                           |
-             +-------------+-------------+
-             |                           |
-             v                           v
-     Observability App             Monitoring Stack
-        2 replicas                      |
-             |                    +-----+------+
-             |                    |            |
-          /metrics             Prometheus   Grafana
-             |                    |
-             +--------------------+
-                                  |
-                    +-------------+-------------+
-                    |                           |
-                    v                           v
-             kube-state-metrics          Node Exporter
-                    |                           |
-                    +-------------+-------------+
-                                  |
-                                  v
-                         Kubernetes Metrics
-Technology Stack
-Technology	Purpose
-Kubernetes	Container orchestration
-Minikube	Local Kubernetes environment
-Helm	Monitoring stack deployment
-Prometheus	Metrics collection/querying
-Grafana	Metrics visualization
-kube-state-metrics	Kubernetes object-state metrics
-Node Exporter	Node-level metrics
-Flask	Application API
-Gunicorn	Production WSGI server
-Python 3.12	Application runtime
-pytest	Automated testing
-GitHub Actions	CI validation
-Application
+Gateway discovers:
 
-The application exposes:
+service-a.project-33.svc.cluster.local:5000
+service-b.project-33.svc.cluster.local:5000
 
-GET /
-GET /health
-GET /metrics
+CoreDNS resolves these names to Kubernetes ClusterIP addresses.
 
-Example health response:
+🧩 Components
+Component	Purpose
+Gateway	External API entry point and service discovery client
+Service A	Internal backend microservice
+Service B	Internal backend microservice
+ClusterIP	Internal Kubernetes networking
+CoreDNS	Kubernetes DNS/service discovery
+AWS Load Balancer	External gateway access
+Amazon ECR	Container image registry
+Amazon EKS	Kubernetes runtime
+📁 Project Structure
+project-33-eks-service-discovery/
+│
+├── app/
+│   ├── app.py
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   │
+│   ├── service-a/
+│   │   ├── app.py
+│   │   ├── Dockerfile
+│   │   └── requirements.txt
+│   │
+│   └── service-b/
+│       ├── app.py
+│       ├── Dockerfile
+│       └── requirements.txt
+│
+├── k8s/
+│   ├── namespace.yml
+│   ├── services.yml
+│   └── gateway.yml
+│
+├── tests/
+│   └── test_service_discovery.py
+│
+├── .dockerignore
+├── .gitignore
+└── README.md
+🐳 Container Images
 
-{
-  "status": "healthy",
-  "uid": 10001
-}
+Images are stored in Amazon ECR:
 
-The application exports:
+742820980479.dkr.ecr.ap-south-1.amazonaws.com/ci-cd-mastery/applications
 
-k8s_observability_requests_total
-k8s_observability_uptime_seconds
-Prometheus Integration
+Project 33 images:
 
-The application uses Kubernetes pod annotations:
+project-33-gateway
+project-33-service-a
+project-33-service-b
+☸️ Kubernetes Resources
 
-prometheus.io/scrape: "true"
-prometheus.io/path: "/metrics"
-prometheus.io/port: "5000"
+Namespace:
 
-Prometheus discovers the application and scrapes the metrics endpoint.
+project-33
 
-This demonstrates the relationship:
+Deployments:
 
-Pod
- |
- +-- /metrics
-       |
-       v
-   Prometheus
-       |
-       v
- PromQL / Grafana
-Kubernetes Security
+gateway
+service-a
+service-b
 
-The application runs as:
+Services:
 
-UID 10001
-GID 10001
+gateway    LoadBalancer
+service-a  ClusterIP
+service-b  ClusterIP
 
-Pod security configuration includes:
+Each workload uses two replicas.
+
+🔐 Container Security
+
+Containers run as a dedicated non-root user:
+
+UID: 10001
+
+Kubernetes security controls include:
 
 runAsNonRoot: true
 runAsUser: 10001
-runAsGroup: 10001
-seccompProfile:
-  type: RuntimeDefault
-
-Container security includes:
-
 allowPrivilegeEscalation: false
-
 capabilities:
   drop:
     - ALL
 
-These controls implement least privilege and reduce container escape/privilege-escalation risk.
+The containers also define CPU and memory requests/limits.
 
-Health Management
+❤️ Health Checks
 
-The deployment uses both:
+All workloads include Kubernetes readiness and liveness probes.
 
-Readiness Probe
+Example:
 
-Determines whether the pod should receive traffic.
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 5000
 
-/health
-Liveness Probe
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 5000
 
-Determines whether Kubernetes should restart an unhealthy container.
+The application containers also include Docker health checks.
 
-/health
+🧪 Automated Tests
 
-Interview distinction:
+The project includes YAML validation tests covering:
 
-Readiness controls traffic eligibility; liveness controls process recovery.
+Namespace configuration
+ClusterIP services
+Kubernetes DNS configuration
+Non-root security configuration
 
-Resource Governance
+Run:
 
-The application specifies:
+python3 -m pytest -q
 
-requests:
-  cpu: 50m
-  memory: 64Mi
+Verified result:
 
-limits:
-  cpu: 250m
-  memory: 256Mi
+4 passed
+🔍 Kubernetes Manifest Validation
 
-Requests influence scheduling.
+Before deployment:
 
-Limits constrain maximum resource consumption.
+kubectl apply --dry-run=client -f k8s/namespace.yml
+kubectl apply --dry-run=client -f k8s/services.yml
+kubectl apply --dry-run=client -f k8s/gateway.yml
 
-This prevents an individual workload from consuming unlimited cluster resources.
+All manifests successfully passed client-side validation.
 
-RBAC
+🚀 Deployment
 
-The project defines:
+Create the namespace:
 
-ServiceAccount
-ClusterRole
-ClusterRoleBinding
+kubectl apply -f k8s/namespace.yml
 
-The monitoring identity receives only the Kubernetes API permissions required for observation.
+Deploy backend services:
 
-This demonstrates:
+kubectl apply -f k8s/services.yml
 
-Kubernetes observability should follow least-privilege RBAC rather than using unrestricted cluster access.
+Deploy the gateway:
 
-Helm
+kubectl apply -f k8s/gateway.yml
 
-The monitoring platform is deployed using:
+Verify:
 
-prometheus-community/kube-prometheus-stack
+kubectl get deployments -n project-33
+kubectl get pods -n project-33
+kubectl get svc -n project-33
+🌐 Gateway API
 
-The stack provides:
+The gateway exposes:
 
-Prometheus
-Grafana
-Prometheus Operator
-kube-state-metrics
-Node Exporter
+Root
+GET /
 
-The project validates both:
+Returns gateway status and hostname.
 
-helm lint
-helm template
+Health
+GET /health
 
-before runtime deployment.
+Returns:
 
-Runtime Validation
+{
+  "status": "healthy"
+}
+Service Discovery
+GET /discover
 
-The Minikube environment validates:
+The gateway calls both backend services using Kubernetes DNS.
 
-Namespace
-ConfigMap
-RBAC
-Application Deployment
-Application Service
-Pod readiness
-Pod liveness
-Application metrics
-Prometheus
-Grafana
-kube-state-metrics
-Node Exporter
-CI/CD
+Expected response:
 
-Dedicated workflow:
-
-.github/workflows/project-32-kubernetes-observability.yml
-
-Pipeline:
-
-Checkout
-   |
-Python 3.12
-   |
-pytest
-   |
-YAML validation
-   |
-Helm repository
-   |
-Pinned chart download
-   |
-Helm lint
-   |
-Helm template
-   |
-Kubernetes manifest validation
-
-CI deliberately does not attempt to connect to the developer's local Minikube cluster.
-
-GitHub-hosted runners are separate machines from the developer's WSL environment.
-
-Troubleshooting
-Prometheus target DOWN
-
-Check:
-
-kubectl get pods -n observability
-kubectl get svc -n observability
-
-Then inspect:
-
-kubectl logs -n observability deploy/observability-app
-
-Validate the metrics endpoint:
-
-kubectl port-forward \
-  -n observability \
-  svc/observability-app \
-  5001:5000
-
-curl http://localhost:5001/metrics
-Pod not Ready
-
-Check:
-
-kubectl describe pod -n observability <pod>
-
-Then inspect:
-
-kubectl logs -n observability <pod>
-Helm failure
-
-Validate:
-
-helm lint \
-  prometheus-community/kube-prometheus-stack \
-  -f helm/values.yaml
-
-Render:
-
-helm template monitoring \
-  prometheus-community/kube-prometheus-stack \
-  -n observability \
-  -f helm/values.yaml
-Interview Questions
-Why Prometheus?
-
-Prometheus provides pull-based metrics collection, time-series storage and PromQL querying. It is well suited to Kubernetes environments.
-
-Why Grafana?
-
-Grafana provides dashboards and visualization over Prometheus metrics.
-
-Why kube-state-metrics?
-
-kube-state-metrics exposes the state of Kubernetes API objects such as deployments, pods, replicasets and jobs.
-
-Why Node Exporter?
-
-Node Exporter provides host-level metrics such as CPU, memory, filesystem and network statistics.
-
-Readiness vs liveness?
-
-Readiness determines whether a pod can receive traffic. Liveness determines whether Kubernetes should restart the container.
-
-Requests vs limits?
-
-Requests influence scheduling and represent expected resource consumption. Limits constrain maximum consumption.
-
-Why non-root?
-
-A compromised application running as non-root has less privilege and therefore a smaller blast radius.
-
-Why RBAC?
-
-RBAC implements least privilege for Kubernetes API access.
-
-Why Helm?
-
-Helm packages complex Kubernetes applications into repeatable, configurable releases.
-
-Production Evolution
-
-This Minikube implementation is the foundation for the EKS track.
-
-The production evolution is:
-
-Minikube
-   |
-   v
+{
+  "gateway": "service-discovery-gateway",
+  "services": {
+    "service-a": {
+      "healthy": true,
+      "status": 200,
+      "url": "http://service-a.project-33.svc.cluster.local:5000"
+    },
+    "service-b": {
+      "healthy": true,
+      "status": 200,
+      "url": "http://service-b.project-33.svc.cluster.local:5000"
+    }
+  }
+}
+✅ Production Runtime Verification
+
+Project 33 was deployed to Amazon EKS and verified end-to-end.
+
+Deployment Status
+gateway     2/2
+service-a   2/2
+service-b   2/2
+Pod Status
+
+All six application pods were verified:
+
+Running
+0 restarts
+Service Discovery
+
+The gateway successfully discovered both services:
+
+service-a → HTTP 200 → healthy
+service-b → HTTP 200 → healthy
+Kubernetes DNS
+
+Direct DNS verification was also performed.
+
+Service A:
+
+service-a.project-33.svc.cluster.local
+→ 172.20.35.63
+
+Service B:
+
+service-b.project-33.svc.cluster.local
+→ 172.20.222.242
+
+CoreDNS:
+
+172.20.0.10:53
+
+This proves that Kubernetes-native DNS service discovery is functioning inside the EKS cluster.
+
+🔄 End-to-End Request Flow
+Client
+  │
+  │ HTTP
+  ▼
+AWS Load Balancer
+  │
+  ▼
+Gateway
+  │
+  │ HTTP request
+  ▼
+CoreDNS
+  │
+  ├── service-a.project-33.svc.cluster.local
+  │
+  └── service-b.project-33.svc.cluster.local
+  │
+  ▼
+ClusterIP Services
+  │
+  ▼
+Backend Pods
+🛠️ Technologies
 AWS EKS
-   |
-   +-- ECR
-   +-- IAM / IRSA
-   +-- EBS CSI
-   +-- AWS Load Balancer Controller
-   +-- Prometheus
-   +-- Grafana
-   +-- Alertmanager
-   +-- HPA
-   +-- NetworkPolicy
-   +-- CloudWatch
-Project Outcome
+Kubernetes
+Amazon ECR
+Kubernetes Services
+CoreDNS
+Docker
+Python
+Flask
+Gunicorn
+pytest
+AWS Load Balancer
+Terraform-managed EKS infrastructure
+🎓 DevOps Concepts Demonstrated
 
-The project demonstrates practical Kubernetes observability rather than simply installing Prometheus.
+This project demonstrates practical knowledge of:
 
-It validates:
+Kubernetes service discovery
+ClusterIP networking
+Kubernetes DNS
+CoreDNS
+EKS networking
+AWS Load Balancers
+Container image lifecycle
+Amazon ECR
+Kubernetes Deployments
+Rolling updates
+Health probes
+Resource management
+Container security
+Non-root execution
+Microservice communication
+Runtime troubleshooting
+Production-style validation
+🧠 Key Learning
 
-application telemetry
-Kubernetes telemetry
-node telemetry
-monitoring discovery
-security
-RBAC
-health management
-resource governance
-Helm
-CI validation
-Status
+Kubernetes Services provide stable networking endpoints while CoreDNS provides
+DNS-based discovery.
 
-Project 32 — COMPLETE
+Applications do not need to know the individual Pod IP addresses.
 
-Dedicated branch: project-32-kubernetes-observability
-Dedicated GitHub Actions workflow: GREEN
-Application metrics: VERIFIED
-Kubernetes manifests: VERIFIED
-Helm validation: VERIFIED
-Prometheus stack: VERIFIED
-Grafana: VERIFIED
-kube-state-metrics: VERIFIED
-Node Exporter: VERIFIED
-Security controls: VERIFIED
-RBAC: VERIFIED
-EOF
+Instead, the gateway uses:
+
+service-a.project-33.svc.cluster.local
+service-b.project-33.svc.cluster.local
+
+Kubernetes handles service-to-pod routing behind those stable DNS names.
+
+This enables pods to be replaced, rescheduled, or scaled without requiring
+application configuration changes.
+
+🏁 Project Status
+Project 33 — EKS Service Discovery Platform
+
+Application              ✅
+Docker                    ✅
+Amazon ECR                ✅
+EKS deployment            ✅
+ClusterIP services        ✅
+Kubernetes DNS            ✅
+CoreDNS discovery         ✅
+Gateway LoadBalancer      ✅
+Health probes             ✅
+Container security        ✅
+Automated tests           ✅
+Runtime verification      ✅
+End-to-end discovery      ✅
+
+Project 33 is functionally complete and verified on Amazon EKS.
