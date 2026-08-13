@@ -1,0 +1,157 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-a
+  namespace: project-33
+  labels:
+    app: service-a
+    project: project-33
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: service-a
+  template:
+    metadata:
+      labels:
+        app: service-a
+        project: project-33
+    spec:
+      containers:
+        - name: service-a
+          image: 742820980479.dkr.ecr.ap-south-1.amazonaws.com/ci-cd-mastery/applications:project-33-service-a
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+              protocol: TCP
+          env:
+            - name: SERVICE_VERSION
+              value: "1.0.0"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-a
+  namespace: project-33
+  labels:
+    app: service-a
+    project: project-33
+spec:
+  type: ClusterIP
+  selector:
+    app: service-a
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-b
+  namespace: project-33
+  labels:
+    app: service-b
+    project: project-33
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: service-b
+  template:
+    metadata:
+      labels:
+        app: service-b
+        project: project-33
+    spec:
+      containers:
+        - name: service-b
+          image: 742820980479.dkr.ecr.ap-south-1.amazonaws.com/ci-cd-mastery/applications:project-33-service-b
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+              protocol: TCP
+          env:
+            - name: SERVICE_VERSION
+              value: "1.0.0"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-b
+  namespace: project-33
+  labels:
+    app: service-b
+    project: project-33
+spec:
+  type: ClusterIP
+  selector:
+    app: service-b
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
+      protocol: TCP
