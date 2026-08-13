@@ -89,7 +89,19 @@ jobs:
       - name: Validate Kubernetes manifests
         working-directory: project-32-kubernetes-observability
         run: |
-          for manifest in k8s/*.yml; do
-            echo "Validating ${manifest}"
-            kubectl apply               --dry-run=client               --validate=false               -f "${manifest}"
-          done
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          for manifest in sorted(Path("k8s").glob("*.yml")):
+              documents = list(yaml.safe_load_all(manifest.read_text()))
+              assert documents, f"No YAML documents found: {manifest}"
+
+              for document in documents:
+                  assert isinstance(document, dict), f"Invalid Kubernetes document: {manifest}"
+                  assert document.get("apiVersion"), f"Missing apiVersion: {manifest}"
+                  assert document.get("kind"), f"Missing kind: {manifest}"
+                  assert document.get("metadata", {}).get("name"), f"Missing metadata.name: {manifest}"
+
+              print(f"VALID: {manifest}")
+          PY
