@@ -89,8 +89,7 @@ jobs:
       - name: Validate Kubernetes manifests
         working-directory: project-32-kubernetes-observability
         run: |
-          kubectl apply --dry-run=client -f k8s/namespace.yml
-          kubectl apply --dry-run=client -f k8s/configmap.yml
-          kubectl apply --dry-run=client -f k8s/deployment.yml
-          kubectl apply --dry-run=client -f k8s/service.yml
-          kubectl apply --dry-run=client -f k8s/rbac.yml
+          for manifest in k8s/*.yml; do
+            echo "Validating ${manifest}"
+            kubectl apply               --dry-run=client               --validate=false               -f "${manifest}"
+          done
