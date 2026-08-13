@@ -103,7 +103,7 @@ jobs:
       - name: Trivy scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: "$IMAGE_NAME:${{ github.sha }}"
+          image-ref: "project-35-gateway:${{ github.sha }}"
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
