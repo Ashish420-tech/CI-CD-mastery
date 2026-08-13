@@ -164,7 +164,7 @@ jobs:
       - name: Verify Kubernetes rollout
         run: |
           kubectl rollout status \
-            deployment/project-36-project-36-app \
+            deployment/project-36 \
             -n "$NAMESPACE" \
             --timeout=180s
 
