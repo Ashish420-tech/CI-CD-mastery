@@ -14,11 +14,11 @@ permissions:
 
 jobs:
   security:
-    uses: ./.github/workflows/reusable/security.yml
+    uses: ./.github/workflows/reusable-security.yml
 
   terraform:
     needs: security
-    uses: ./.github/workflows/reusable/terraform.yml
+    uses: ./.github/workflows/reusable-terraform.yml
     with:
       working_directory: infrastructure/eks
 
@@ -57,7 +57,7 @@ jobs:
     needs:
       - terraform
       - application-tests
-    uses: ./.github/workflows/reusable/build-push.yml
+    uses: ./.github/workflows/reusable-build-push.yml
     with:
       image_name: ci-cd-mastery/applications
       dockerfile: project-38-eks-application-platform/app/Dockerfile
@@ -65,7 +65,7 @@ jobs:
 
   deploy:
     needs: build
-    uses: ./.github/workflows/reusable/eks-deploy.yml
+    uses: ./.github/workflows/reusable-eks-deploy.yml
     with:
       namespace: project-38
       release: project-38
