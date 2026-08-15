@@ -1,3 +1,72 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT="$HOME/CI-CD-mastery"
+PROJECT="$ROOT/project-36-helm-application-packaging"
+WORKFLOW="$ROOT/.github/workflows/project-36-helm-cicd.yml"
+
+cd "$ROOT"
+
+echo
+echo "============================================================"
+echo " PROJECT 36 - DEVSECOPS CI/CD CONFIGURATION"
+echo "============================================================"
+
+echo
+echo "===== 1. VERIFY BRANCH ====="
+
+BRANCH="$(git branch --show-current)"
+
+echo "Branch: $BRANCH"
+
+if [[ "$BRANCH" != "project-36-helm-application-packaging" ]]; then
+    echo "ERROR: Wrong branch."
+    exit 1
+fi
+
+echo
+echo "===== 2. REMOVE LOCAL PRE-COMMIT CONFIG ====="
+
+rm -f "$PROJECT/.pre-commit-config.yaml"
+
+echo "Removed Project 36 local pre-commit configuration."
+
+echo
+echo "===== 3. RESTORE ACCIDENTAL UNRELATED FORMATTING ====="
+
+git restore -- \
+    project-24-compose-observability/README.md \
+    project-26-compose-dependency-resilience/README.md \
+    2>/dev/null || true
+
+echo "Unrelated README changes restored."
+
+echo
+echo "===== 4. VERIFY INTENDED APPLICATION CHANGES ====="
+
+grep -q '@app.get("/version")' \
+    "$PROJECT/app/app.py"
+
+grep -q 'ci_cd="github-actions"' \
+    "$PROJECT/app/app.py"
+
+grep -q 'test_application_version_endpoint' \
+    "$PROJECT/tests/test_helm.py"
+
+echo "Application /version endpoint: FOUND"
+echo "Application test: FOUND"
+
+echo
+echo "===== 5. BACKUP WORKFLOW ====="
+
+cp "$WORKFLOW" "${WORKFLOW}.backup.$(date +%Y%m%d%H%M%S)"
+
+echo "Workflow backup created."
+
+echo
+echo "===== 6. REBUILD PROJECT 36 WORKFLOW ====="
+
+cat > "$WORKFLOW" <<'YAML'
 name: Project 36 - Helm CI/CD
 
 on:
@@ -199,3 +268,87 @@ jobs:
             -- \
             curl -fsS \
             http://project-36.$NAMESPACE.svc.cluster.local/version
+YAML
+
+echo "Workflow rebuilt with Gitleaks security gate."
+
+echo
+echo "===== 7. VERIFY GITLEAKS STAGE ====="
+
+grep -n -A12 '^  security:' "$WORKFLOW"
+
+echo
+echo "===== 8. VERIFY PIPELINE DEPENDENCY ====="
+
+grep -n -A4 '^  test:' "$WORKFLOW"
+
+echo
+echo "===== 9. VALIDATE PROJECT 36 TESTS ====="
+
+if [[ -x "$PROJECT/.venv/bin/python" ]]; then
+    "$PROJECT/.venv/bin/python" -m pytest -q \
+        "$PROJECT/tests"
+else
+    echo "WARNING: Project .venv not found."
+    echo "Skipping local pytest."
+fi
+
+echo
+echo "===== 10. HELM VALIDATION ====="
+
+helm lint "$PROJECT/chart/project-36-app"
+
+helm template project-36 \
+    "$PROJECT/chart/project-36-app" \
+    --namespace project-36 \
+    --set image.repository=project-36-helm-app \
+    --set image.tag=local-test \
+    >/dev/null
+
+echo "Helm lint/template: PASS"
+
+echo
+echo "===== 11. GIT STATUS ====="
+
+git status --short
+
+echo
+echo "===== 12. FINAL DIFF ====="
+
+git diff -- \
+    "$WORKFLOW" \
+    "$PROJECT/app/app.py" \
+    "$PROJECT/tests/test_helm.py" \
+    "$PROJECT/.pre-commit-config.yaml"
+
+echo
+echo "============================================================"
+echo " CONFIGURATION COMPLETE"
+echo "============================================================"
+
+echo
+echo "IMPORTANT:"
+echo "Nothing has been committed."
+echo "Nothing has been pushed."
+
+echo
+echo "Expected pipeline:"
+echo
+echo "  Gitleaks"
+echo "      ↓"
+echo "  pytest"
+echo "      ↓"
+echo "  Helm lint/template/package"
+echo "      ↓"
+echo "  Docker build + Trivy"
+echo "      ↓"
+echo "  ECR push"
+echo "      ↓"
+echo "  Helm → EKS"
+echo "      ↓"
+echo "  Rollout"
+echo "      ↓"
+echo "  /version smoke test"
+
+echo
+echo "Review git diff, then commit/push manually."
