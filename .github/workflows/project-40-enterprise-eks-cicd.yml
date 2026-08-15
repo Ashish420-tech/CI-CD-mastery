@@ -1,0 +1,112 @@
+name: Project 40 - Enterprise EKS CI/CD Platform
+
+on:
+  push:
+    branches:
+      - project-40-enterprise-eks-cicd
+  pull_request:
+    branches:
+      - project-40-enterprise-eks-cicd
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  security:
+    uses: ./.github/workflows/reusable/security.yml
+
+  terraform:
+    needs: security
+    uses: ./.github/workflows/reusable/terraform.yml
+    with:
+      working_directory: infrastructure/eks
+
+  application-tests:
+    needs: security
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: project-38-eks-application-platform/app
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run tests
+        working-directory: project-38-eks-application-platform
+        run: pytest -q
+
+      - name: Helm validation
+        run: |
+          helm lint project-38-eks-application-platform/chart/project-38-app
+          helm template project-38 \
+            project-38-eks-application-platform/chart/project-38-app \
+            --namespace project-38
+
+  build:
+    needs:
+      - terraform
+      - application-tests
+    uses: ./.github/workflows/reusable/build-push.yml
+    with:
+      image_name: ci-cd-mastery/applications
+      dockerfile: project-38-eks-application-platform/app/Dockerfile
+      context: project-38-eks-application-platform/app
+
+  deploy:
+    needs: build
+    uses: ./.github/workflows/reusable/eks-deploy.yml
+    with:
+      namespace: project-38
+      release: project-38
+      chart: project-38-eks-application-platform/chart/project-38-app
+      image_repository: 742820980479.dkr.ecr.ap-south-1.amazonaws.com/ci-cd-mastery/applications
+      image_tag: ${{ github.sha }}
+
+  traceability:
+    needs:
+      - build
+      - deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Configure AWS through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      - name: Verify ECR Git SHA traceability
+        run: |
+          aws ecr describe-images \
+            --repository-name ci-cd-mastery/applications \
+            --image-ids imageTag="${GITHUB_SHA}" \
+            --region ap-south-1 \
+            --query 'imageDetails[0].{Tags:imageTags,Digest:imageDigest,Pushed:imagePushedAt}' \
+            --output table
+
+      - name: Verify deployed image
+        run: |
+          aws eks update-kubeconfig \
+            --name ci-cd-mastery-eks \
+            --region ap-south-1
+
+          kubectl get deployment project-38 \
+            -n project-38 \
+            -o jsonpath='{.spec.template.spec.containers[0].image}'
+
+          echo
+          echo "PROJECT 40 ENTERPRISE EKS CI/CD: PASS"

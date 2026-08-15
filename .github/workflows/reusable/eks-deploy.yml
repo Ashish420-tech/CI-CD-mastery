@@ -1,0 +1,104 @@
+name: Reusable EKS Deploy
+
+on:
+  workflow_call:
+    inputs:
+      namespace:
+        required: true
+        type: string
+      release:
+        required: true
+        type: string
+      chart:
+        required: true
+        type: string
+      image_repository:
+        required: true
+        type: string
+      image_tag:
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    name: Helm Deploy and Verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: latest
+
+      - name: Configure AWS through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      - name: Configure kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name ci-cd-mastery-eks \
+            --region ap-south-1
+
+      - name: Helm lint
+        run: helm lint "${{ inputs.chart }}"
+
+      - name: Helm template
+        run: |
+          helm template "${{ inputs.release }}" \
+            "${{ inputs.chart }}" \
+            --namespace "${{ inputs.namespace }}" \
+            --set image.repository="${{ inputs.image_repository }}" \
+            --set image.tag="${{ inputs.image_tag }}"
+
+      - name: Helm deploy
+        run: |
+          helm upgrade --install \
+            "${{ inputs.release }}" \
+            "${{ inputs.chart }}" \
+            --namespace "${{ inputs.namespace }}" \
+            --create-namespace \
+            --set image.repository="${{ inputs.image_repository }}" \
+            --set image.tag="${{ inputs.image_tag }}"
+
+      - name: Rollout verification
+        run: |
+          kubectl rollout status \
+            deployment/project-38 \
+            -n "${{ inputs.namespace }}" \
+            --timeout=180s
+
+      - name: Kubernetes verification
+        run: |
+          kubectl get deployment -n "${{ inputs.namespace }}"
+          kubectl get pods -n "${{ inputs.namespace }}"
+          helm list -n "${{ inputs.namespace }}"
+
+      - name: Smoke test
+        shell: bash
+        run: |
+          kubectl port-forward \
+            -n "${{ inputs.namespace }}" \
+            svc/project-38 \
+            8080:80 >/tmp/project40-port-forward.log 2>&1 &
+
+          PF_PID=$!
+          trap 'kill "$PF_PID" 2>/dev/null || true' EXIT
+
+          sleep 5
+
+          curl --fail --silent http://127.0.0.1:8080/health
+          echo
+          curl --fail --silent http://127.0.0.1:8080/version
+          echo
