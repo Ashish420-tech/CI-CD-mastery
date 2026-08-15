@@ -14,6 +14,17 @@ def root():
     )
 
 
+@app.get("/version")
+def version():
+    return jsonify(
+        application="project-36-helm-app",
+        version=os.getenv("APP_VERSION", "1.0.0"),
+        environment=os.getenv("APP_ENVIRONMENT", "production"),
+        deployment="helm",
+        ci_cd="github-actions",
+    )
+
+
 @app.get("/health")
 def health():
     return jsonify(status="healthy")
