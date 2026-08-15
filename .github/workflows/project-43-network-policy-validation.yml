@@ -1,0 +1,71 @@
+name: Project 43 - Kubernetes Network Policy Validation
+
+on:
+  push:
+    branches:
+      - project-43-kubernetes-network-security
+    paths:
+      - 'project-43-kubernetes-network-security/**'
+      - '.github/workflows/project-43-network-policy-validation.yml'
+  pull_request:
+    branches:
+      - project-43-kubernetes-network-security
+    paths:
+      - 'project-43-kubernetes-network-security/**'
+      - '.github/workflows/project-43-network-policy-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-network-policy:
+    name: Validate NetworkPolicy Manifests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.34.9'
+
+      - name: Validate NetworkPolicy manifests
+        run: |
+          set -euo pipefail
+
+          POLICY_FILE="project-43-kubernetes-network-security/manifests/network-policy.yaml"
+
+          echo "=============================================="
+          echo "PROJECT 43 NETWORK POLICY VALIDATION"
+          echo "=============================================="
+
+          test -f "$POLICY_FILE"
+
+          echo
+          echo "Policy file:"
+          echo "$POLICY_FILE"
+
+          echo
+          echo "NetworkPolicy count:"
+          COUNT="$(grep -c '^kind: NetworkPolicy$' "$POLICY_FILE")"
+          echo "$COUNT"
+
+          test "$COUNT" -eq 4
+
+          echo
+          echo "Expected policies:"
+          grep '^  name:' "$POLICY_FILE"
+
+          echo
+          echo "Kubernetes client-side validation:"
+          kubectl apply \
+            --dry-run=client \
+            -f "$POLICY_FILE"
+
+          echo
+          echo "=============================================="
+          echo "NETWORK POLICY VALIDATION: PASS"
+          echo "4 NetworkPolicies validated."
+          echo "=============================================="
