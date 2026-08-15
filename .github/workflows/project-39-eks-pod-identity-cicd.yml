@@ -54,6 +54,16 @@ jobs:
         working-directory: infrastructure/eks
         run: terraform init -input=false
 
+      - name: Configure AWS through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS Identity
+        run: |
+          aws sts get-caller-identity
+
       - name: Terraform Validate
         working-directory: infrastructure/eks
         run: terraform validate
@@ -67,6 +77,7 @@ jobs:
             -target=aws_iam_role.project39_pod_identity \
             -target=aws_iam_role_policy.project39_pod_identity \
             -target=aws_eks_pod_identity_association.project39
+
 
   kubernetes:
     name: Kubernetes Manifest Validation
