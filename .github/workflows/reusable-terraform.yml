@@ -6,11 +6,18 @@ on:
       working_directory:
         required: true
         type: string
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
 
 jobs:
   terraform:
     name: Terraform Validate and Plan
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
 
     defaults:
       run:
@@ -22,6 +29,12 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
 
       - name: Terraform Format Check
         run: terraform fmt -check -recursive

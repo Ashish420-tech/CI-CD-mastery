@@ -1,206 +1,210 @@
-# 🚀 Project 40 — Enterprise EKS CI/CD Platform
+# Project 40 — Enterprise EKS CI/CD Platform
 
-> Reusable enterprise-style CI/CD foundation for the existing Amazon EKS platform using GitHub Actions, GitHub OIDC, Terraform, Trivy, ECR, Helm and Kubernetes.
+## 🚀 Overview
 
-![AWS](https://img.shields.io/badge/AWS-EKS-orange?logo=amazonaws)
-![Kubernetes](https://img.shields.io/badge/Kubernetes-EKS-blue?logo=kubernetes)
-![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-CI%2FCD-black?logo=githubactions)
-![Terraform](https://img.shields.io/badge/Terraform-IaC-purple?logo=terraform)
-![Docker](https://img.shields.io/badge/Docker-Container-blue?logo=docker)
-![Trivy](https://img.shields.io/badge/Trivy-DevSecOps-red)
-![Helm](https://img.shields.io/badge/Helm-Kubernetes-0F1689?logo=helm)
+Project 40 transforms the CI/CD patterns developed across Projects 36–39 into a reusable enterprise-style CI/CD platform for Amazon EKS.
 
-## Overview
+The platform provides reusable GitHub Actions workflows for:
 
-Project 40 converts the delivery patterns built in Projects 36–39 into a reusable CI/CD foundation.
+- Security scanning
+- Application testing
+- Terraform validation and planning
+- Docker image builds
+- Trivy security scanning
+- Amazon ECR publishing
+- Helm deployment
+- EKS rollout verification
+- Kubernetes smoke testing
+- Git SHA traceability
 
-Instead of duplicating GitHub Actions logic in every future project, common pipeline capabilities are centralized into reusable workflows.
+The implementation reuses the existing EKS platform, ECR repository, Terraform configuration and GitHub OIDC authentication.
 
-## Architecture
+---
+
+## 🏗️ Architecture
+
+Git Push
+    │
+    ▼
+Gitleaks
+    │
+    ▼
+Application Tests
+    │
+    ▼
+Terraform Validate + Plan
+    │
+    ▼
+Docker Build
+    │
+    ▼
+Trivy Security Scan
+    │
+    ▼
+Amazon ECR
+    │
+    ▼
+Helm
+    │
+    ▼
+Amazon EKS
+    │
+    ▼
+Rollout Verification
+    │
+    ▼
+Smoke Tests
+    │
+    ▼
+Git SHA Traceability
+
+---
+
+## 🧩 Reusable CI/CD Components
+
+The platform provides reusable GitHub Actions workflows:
 
 ```text
-Developer
-   ↓
-Git Push / Pull Request
-   ↓
-Reusable Security
-   ├── Gitleaks
-   └── Security Gate
-   ↓
-Reusable Validation
-   ├── Tests
-   ├── Helm Lint
-   ├── Helm Template
-   └── Terraform Validate / Plan
-   ↓
-Reusable Build
-   ├── Docker Build
-   ├── Trivy Scan
-   ├── Git SHA Tag
-   └── ECR Push
-   ↓
-Reusable Deployment
-   ├── GitHub OIDC
-   ├── EKS Kubeconfig
-   ├── Helm Upgrade
-   └── Rollout Verification
-   ↓
-Smoke Tests
-   ↓
-Traceability
-   ├── Git SHA
-   ├── ECR Digest
-   └── Deployed Image
+.github/workflows/
+├── reusable-security.yml
+├── reusable-terraform.yml
+├── reusable-build-push.yml
+└── reusable-eks-deploy.yml
 
-Reusable CI/CD Components
-.github/workflows/reusable/
+The Project 40 orchestrator consumes these reusable workflows.
 
+🔐 Security
 
-security.yml
-terraform.yml
-build-push.yml
-eks-deploy.yml
+The pipeline implements:
 
-These workflows are invoked using GitHub Actions workflow_call.
+GitHub OIDC authentication
+No long-lived AWS access keys
+Gitleaks secret scanning
+Trivy container scanning
+ECR immutable image tags
+Git SHA image traceability
+Security gates before deployment
+Terraform validation before deployment
 
-Future projects can therefore consume the same platform capabilities without rebuilding the delivery pipeline.
+AWS access is performed using:
 
-Existing AWS Platform
+GitHub Actions
+      ↓
+OIDC
+      ↓
+AWS IAM Role
+      ↓
+AWS Services
+☁️ AWS Platform
 
-No new AWS platform infrastructure is created.
+Existing platform components are reused:
 
-Component	Existing Value
-Region	ap-south-1
-EKS Cluster	ci-cd-mastery-eks
-ECR	ci-cd-mastery/applications
-Authentication	GitHub OIDC
-Deployment	Helm
-Workload	Project 38
-Image Identity	Git commit SHA
-Security
-
-Project 40 uses:
-
-Gitleaks
-Trivy
+Amazon EKS
+Amazon ECR
+VPC
+EBS CSI
+VPC CNI
+CoreDNS
+kube-proxy
+EKS Pod Identity
 GitHub OIDC
-immutable ECR image tags
-Terraform validation
-Helm validation
-rollout verification
-Kubernetes smoke testing
 
-No long-lived AWS credentials are introduced.
+No duplicate EKS or ECR infrastructure is created.
 
-Git SHA Traceability
+🚢 Deployment
+
+The deployment pipeline performs:
+
+Helm lint
+Helm template validation
+Helm deployment
+Kubernetes rollout verification
+Pod verification
+Application smoke testing
+Image traceability verification
+🔎 Traceability
+
+Every container image is tagged using the Git commit SHA.
+
+This provides:
+
 Git Commit
-    ↓
-GITHUB_SHA
     ↓
 Docker Image
     ↓
 ECR
     ↓
-SHA256 Digest
-    ↓
 Helm
     ↓
+EKS Deployment
+
+The pipeline verifies that the deployed image corresponds to the expected Git SHA.
+
+🧪 Validation
+
+Successful GitHub Actions run:
+
+31890769705
+
+All pipeline stages passed:
+
+Gitleaks
+Application Tests
+Terraform
+Docker Build
+Trivy
+ECR
+Helm
 EKS
-    ↓
-Running Workload
+Rollout Verification
+Smoke Tests
+Traceability
+🛠️ Technology Stack
+AWS
+Amazon EKS
+Amazon ECR
+Terraform
+Kubernetes
+Helm
+Docker
+GitHub Actions
+GitHub OIDC
+Trivy
+Gitleaks
+Python
+Bash
+🎯 Engineering Outcomes
 
-The deployed container can therefore be traced back to the exact source commit that produced it.
+Project 40 establishes the reusable CI/CD foundation for the remaining EKS DevSecOps platform roadmap.
 
-Cost Control
+Future projects will build on this foundation with:
 
-Project 40 intentionally reuses:
+Secret scanning enhancements
+SBOM
+Image signing
+Image verification
+Kubernetes security policies
+Network security
+GitOps
+Progressive delivery
+Observability
+Autoscaling
+Disaster recovery
+Production platform engineering
+💼 Recruiter Value
 
-existing EKS
-existing ECR
-existing VPC
-existing OIDC
-existing platform Terraform
+This project demonstrates practical experience building an enterprise-style Kubernetes delivery platform rather than a single application pipeline.
 
-No new EKS cluster, VPC, NAT Gateway, node group or duplicate Terraform root is created.
+Key capabilities demonstrated:
 
-Validation
-
-The platform proves:
-
-reusable CI/CD workflows
-GitHub OIDC authentication
-security gates
-Terraform validation
-application testing
-Docker image builds
-Trivy security scanning
-ECR publishing
-Helm deployment
-EKS rollout verification
-Kubernetes smoke tests
-Git SHA traceability
-Project Chain
-Project 36
-Helm Application Packaging
-        ↓
-Project 37
-Immutable ECR Platform
-        ↓
-Project 38
-EKS Application Platform
-        ↓
-Project 39
-EKS Pod Identity
-        ↓
-Project 40
-Enterprise EKS CI/CD Platform
-        ↓
-Projects 41–50
-DevSecOps Security Platform
-        ↓
-Projects 51–60
-Progressive Delivery + GitOps
-        ↓
-Projects 61–70
-Observability Platform
-        ↓
-Projects 71–77
-Production Platform Engineering
-Final Status
-
-Project 40 establishes a reusable enterprise CI/CD foundation for the remaining EKS Platform Engineering + DevSecOps roadmap.
-
-Status: IN PROGRESS
-EOF
-
-
-
-### 4. Validate before pushing
-
-
-```bash
-git status
-git branch --show-current
-
-
-echo "===== YAML FILES ====="
-find .github/workflows -type f | sort
-
-
-echo "===== TERRAFORM ====="
-cd infrastructure/eks
-terraform fmt -check -recursive
-terraform init -input=false
-terraform validate
-cd ../..
-
-
-echo "===== HELM ====="
-helm lint project-38-eks-application-platform/chart/project-38-app
-helm template project-38 \
-  project-38-eks-application-platform/chart/project-38-app \
-  --namespace project-38 >/tmp/project40-rendered.yaml
-
-
-echo "===== GIT STATUS ====="
-git status --short
+Reusable CI/CD architecture
+AWS OIDC federation
+Infrastructure-as-Code validation
+Container security
+Immutable image delivery
+Kubernetes deployment automation
+Helm-based releases
+Deployment verification
+Supply-chain traceability
+DevSecOps security gates
+Production-oriented EKS workflows

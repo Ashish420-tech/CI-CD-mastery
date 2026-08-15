@@ -1,0 +1,52 @@
+name: Reusable Security
+
+on:
+  workflow_call:
+
+jobs:
+  gitleaks:
+    name: Gitleaks Secret Scan
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout full repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks Enterprise Secret Scan
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Security Gate Passed
+        if: success()
+        run: |
+          echo "=============================================="
+          echo "GITLEAKS SECURITY GATE: PASS"
+          echo "No secrets detected."
+          echo "Central configuration: .gitleaks.toml"
+          echo "=============================================="
+
+      - name: Security Gate Failed
+        if: failure()
+        run: |
+          echo "=============================================="
+          echo "GITLEAKS SECURITY GATE: FAILED"
+          echo "=============================================="
+          echo "A potential secret was detected."
+          echo
+          echo "Developer action:"
+          echo "1. Remove the secret from the repository."
+          echo "2. Rotate/revoke the credential if it was real."
+          echo "3. Re-run the security scan."
+          echo "4. Use an allowlist only when the finding is"
+          echo "   demonstrably a non-secret false positive."
+          echo
+          echo "Real credentials must NEVER be allowlisted."
+          echo "=============================================="
+          exit 1

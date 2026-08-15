@@ -1,0 +1,15 @@
+title = "CI/CD Mastery Enterprise Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Only deterministic repository paths that cannot contain application secrets"
+
+paths = [
+  '''(^|/)\.git/''',
+  '''(^|/)\.terraform/''',
+  '''(^|/)\.venv/''',
+  '''(^|/)__pycache__/''',
+  '''(^|/)node_modules/'''
+]
