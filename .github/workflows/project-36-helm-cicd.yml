@@ -23,8 +23,24 @@ env:
 
 jobs:
 
+  security:
+    name: Secret and Git Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout full Git history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   test:
     name: Application and Helm Tests
+    needs: security
     runs-on: ubuntu-latest
 
     steps:
@@ -91,7 +107,7 @@ jobs:
       - name: Trivy scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: "project-36-helm-app:${{ github.sha }}"
+          image-ref: "$IMAGE_NAME:${{ github.sha }}"
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
@@ -137,7 +153,6 @@ jobs:
 
       - name: Verify EKS access
         run: |
-          kubectl auth can-i get pods -n "$NAMESPACE" || true
           kubectl get nodes
 
       - name: Setup Helm
@@ -173,7 +188,7 @@ jobs:
           kubectl get service -n "$NAMESPACE"
           kubectl get endpoints -n "$NAMESPACE"
 
-      - name: Smoke test
+      - name: Verify deployed application
         run: |
           kubectl run project-36-smoke \
             -n "$NAMESPACE" \
@@ -183,4 +198,4 @@ jobs:
             --image=curlimages/curl:8.12.1 \
             -- \
             curl -fsS \
-            http://project-36.$NAMESPACE.svc.cluster.local/health
+            http://project-36.$NAMESPACE.svc.cluster.local/version
