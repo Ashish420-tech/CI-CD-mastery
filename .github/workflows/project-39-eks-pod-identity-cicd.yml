@@ -76,28 +76,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
+      - name: Configure AWS through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          version: latest
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure kubectl for EKS
+        run: |
+          aws eks update-kubeconfig \
+            --name "$EKS_CLUSTER" \
+            --region "$AWS_REGION"
+
+      - name: Verify EKS connectivity
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
 
       - name: Validate Namespace
         run: |
           kubectl apply \
-            --dry-run=client \
+            --dry-run=server \
             -f project-39-eks-pod-identity/manifests/namespace.yaml
 
       - name: Validate ServiceAccount
         run: |
           kubectl apply \
-            --dry-run=client \
+            --dry-run=server \
             -f project-39-eks-pod-identity/manifests/serviceaccount.yaml
 
       - name: Validate Identity Test Pod
         run: |
           kubectl apply \
-            --dry-run=client \
+            --dry-run=server \
             -f project-39-eks-pod-identity/manifests/identity-test-pod.yaml
+
 
   aws-verification:
     name: EKS Pod Identity Verification
