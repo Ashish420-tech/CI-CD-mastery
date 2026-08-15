@@ -18,3 +18,32 @@ resource "aws_ecr_repository" "applications" {
     Purpose = "Shared application registry"
   }
 }
+
+# Project 37 — Immutable image retention.
+# Keep the most recent 20 images to control ECR storage cost while
+# preserving enough release history for rollback and audit purposes.
+
+resource "aws_ecr_lifecycle_policy" "applications" {
+  count = var.enable_ecr ? 1 : 0
+
+  repository = aws_ecr_repository.applications[0].name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Retain the newest 20 immutable application images"
+
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 20
+        }
+
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
