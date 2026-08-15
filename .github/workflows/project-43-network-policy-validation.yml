@@ -26,12 +26,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
-        with:
-          version: 'v1.34.9'
-
       - name: Validate NetworkPolicy manifests
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -59,14 +55,56 @@ jobs:
           grep '^  name:' "$POLICY_FILE"
 
           echo
-          echo "Kubernetes client-side validation:"
-          kubectl apply \
-            --dry-run=client \
-            --validate=false \
-            -f "$POLICY_FILE"
+          echo "YAML syntax validation:"
+          ruby -e '
+          require "yaml"
+          YAML.load_stream(File.read(ARGV[0]))
+          puts "✓ YAML syntax valid"
+          ' "$POLICY_FILE"
+
+          echo
+          echo "NetworkPolicy structure validation:"
+
+          ruby - "$POLICY_FILE" <<'RUBY'
+          require "yaml"
+
+          file = ARGV[0]
+          documents = YAML.load_stream(File.read(file))
+
+          policies = documents.compact.select do |doc|
+            doc.is_a?(Hash) && doc["kind"] == "NetworkPolicy"
+          end
+
+          abort "ERROR: expected 4 NetworkPolicy documents" unless policies.length == 4
+
+          expected = [
+            "project-38-default-deny-ingress",
+            "project-38-default-deny-egress",
+            "project-38-allow-dns",
+            "project-38-allow-labeled-client"
+          ]
+
+          names = policies.map { |policy| policy.dig("metadata", "name") }
+
+          abort "ERROR: unexpected NetworkPolicy names" unless names.sort == expected.sort
+
+          policies.each do |policy|
+            abort "ERROR: missing apiVersion" unless policy["apiVersion"] == "networking.k8s.io/v1"
+            abort "ERROR: invalid kind" unless policy["kind"] == "NetworkPolicy"
+            abort "ERROR: missing metadata.name" unless policy.dig("metadata", "name")
+            abort "ERROR: missing spec" unless policy["spec"].is_a?(Hash)
+          end
+
+          puts "✓ 4 NetworkPolicies detected"
+          puts "✓ API version: networking.k8s.io/v1"
+          puts "✓ Required policy names present"
+          puts "✓ Required policy specifications present"
+          RUBY
 
           echo
           echo "=============================================="
           echo "NETWORK POLICY VALIDATION: PASS"
-          echo "4 NetworkPolicies validated."
+          echo "=============================================="
+          echo "4 NetworkPolicies validated offline."
+          echo "No Kubernetes cluster connection required."
           echo "=============================================="
