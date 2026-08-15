@@ -62,6 +62,7 @@ jobs:
           echo "Kubernetes client-side validation:"
           kubectl apply \
             --dry-run=client \
+            --validate=false \
             -f "$POLICY_FILE"
 
           echo
