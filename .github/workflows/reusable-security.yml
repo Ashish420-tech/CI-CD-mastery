@@ -50,3 +50,66 @@ jobs:
           echo "Real credentials must NEVER be allowlisted."
           echo "=============================================="
           exit 1
+
+  trivy-filesystem:
+    name: Trivy Filesystem Dependency Scan
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem vulnerability scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          format: table
+          skip-dirs: .git,.terraform,.venv,node_modules,__pycache__,.pytest_cache
+          skip-files: '*.pyc'
+
+      - name: Trivy Security Gate Passed
+        if: success()
+        run: |
+          echo "=============================================="
+          echo "TRIVY FILESYSTEM SECURITY GATE: PASS"
+          echo "No HIGH or CRITICAL vulnerabilities detected."
+          echo "Dependency manifests were scanned recursively."
+          echo "=============================================="
+
+      - name: Trivy Security Gate Failed
+        if: failure()
+        run: |
+          echo "=============================================="
+          echo "TRIVY FILESYSTEM SECURITY GATE: FAILED"
+          echo "=============================================="
+          echo
+          echo "HIGH or CRITICAL vulnerabilities were detected."
+          echo
+          echo "Developer action:"
+          echo "1. Review the Trivy findings above."
+          echo "2. Identify the affected dependency and manifest."
+          echo "3. Upgrade to a secure compatible version."
+          echo "4. Re-run the Trivy filesystem scan."
+          echo "5. Do not suppress a genuine vulnerability."
+          echo
+          echo "Controlled exclusions only:"
+          echo "  .git"
+          echo "  .terraform"
+          echo "  .venv"
+          echo "  node_modules"
+          echo "  __pycache__"
+          echo "  .pytest_cache"
+          echo "  *.pyc"
+          echo
+          echo "LOW/MEDIUM findings do not block this gate."
+          echo "HIGH/CRITICAL findings block CI."
+          echo "=============================================="
+          exit 1
+
