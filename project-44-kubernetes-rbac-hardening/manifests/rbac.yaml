@@ -1,0 +1,192 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: project-44-rbac
+  labels:
+    project: project-44
+    security: rbac
+    purpose: least-privilege
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: project-44-app
+  namespace: project-44-rbac
+  labels:
+    project: project-44
+    identity: workload
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: project-44-viewer
+  namespace: project-44-rbac
+  labels:
+    project: project-44
+    identity: viewer
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: project-44-operator
+  namespace: project-44-rbac
+  labels:
+    project: project-44
+    identity: operator
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: project-44-app-reader
+  namespace: project-44-rbac
+  labels:
+    project: project-44
+    security: least-privilege
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+
+  - apiGroups: [""]
+    resources:
+      - services
+    verbs:
+      - get
+
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    verbs:
+      - get
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: project-44-app-reader
+  namespace: project-44-rbac
+  labels:
+    project: project-44
+subjects:
+  - kind: ServiceAccount
+    name: project-44-app
+    namespace: project-44-rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: project-44-app-reader
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: project-44-viewer
+  namespace: project-44-rbac
+  labels:
+    project: project-44
+    security: least-privilege
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - services
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - replicasets
+    verbs:
+      - get
+      - list
+      - watch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: project-44-viewer
+  namespace: project-44-rbac
+  labels:
+    project: project-44
+subjects:
+  - kind: ServiceAccount
+    name: project-44-viewer
+    namespace: project-44-rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: project-44-viewer
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: project-44-operator
+  namespace: project-44-rbac
+  labels:
+    project: project-44
+    security: least-privilege
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+      - patch
+
+  - apiGroups: ["apps"]
+    resources:
+      - replicasets
+    verbs:
+      - get
+      - list
+      - watch
+
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: project-44-operator
+  namespace: project-44-rbac
+  labels:
+    project: project-44
+subjects:
+  - kind: ServiceAccount
+    name: project-44-operator
+    namespace: project-44-rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: project-44-operator

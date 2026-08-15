@@ -1,0 +1,39 @@
+name: Project 44 - Kubernetes RBAC Security
+
+on:
+  push:
+    branches:
+      - project-44-kubernetes-rbac-hardening
+    paths:
+      - 'project-44-kubernetes-rbac-hardening/**'
+      - '.github/workflows/project-44-rbac-security.yml'
+  pull_request:
+    branches:
+      - project-44-kubernetes-rbac-hardening
+    paths:
+      - 'project-44-kubernetes-rbac-hardening/**'
+      - '.github/workflows/project-44-rbac-security.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  rbac-security:
+    name: Enterprise RBAC Security Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Validate RBAC policy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ./project-44-kubernetes-rbac-hardening/scripts/validate-rbac-policy.sh
