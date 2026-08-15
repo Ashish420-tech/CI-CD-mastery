@@ -1,0 +1,184 @@
+name: Project 37 - ECR Immutable Image CI/CD
+
+on:
+  push:
+    branches:
+      - project-37-ecr-immutable-image-platform
+  pull_request:
+    branches:
+      - project-37-ecr-immutable-image-platform
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: ci-cd-mastery/applications
+  IMAGE_NAME: project-37-immutable-verification
+
+jobs:
+
+  security:
+    name: Gitleaks Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test:
+    name: Application Tests
+    needs: security
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r project-36-helm-application-packaging/app/requirements.txt
+          pip install pytest PyYAML
+
+      - name: Run Project 36 tests
+        run: |
+          pytest -q project-36-helm-application-packaging/tests
+
+  build:
+    name: Build and Trivy Scan
+    needs:
+      - security
+      - test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build immutable verification image
+        run: |
+          docker build \
+            -t "$IMAGE_NAME:${GITHUB_SHA}" \
+            project-36-helm-application-packaging/app
+
+      - name: Trivy HIGH/CRITICAL scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: "$IMAGE_NAME:${{ github.sha }}"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  publish:
+    name: Push Immutable Image to ECR
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          IMAGE="$REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA"
+
+          docker build \
+            -t "$IMAGE" \
+            project-36-helm-application-packaging/app
+
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Push Git SHA image
+        run: |
+          docker push "$IMAGE"
+
+      - name: Resolve immutable digest
+        run: |
+          DIGEST=$(aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="$GITHUB_SHA" \
+            --region "$AWS_REGION" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)
+
+          test -n "$DIGEST"
+          test "$DIGEST" != "None"
+
+          echo "Git SHA: $GITHUB_SHA"
+          echo "ECR Digest: $DIGEST"
+
+          echo "DIGEST=$DIGEST" >> "$GITHUB_ENV"
+
+      - name: Verify ECR immutability
+        run: |
+          MUTABILITY=$(aws ecr describe-repositories \
+            --repository-names "$ECR_REPOSITORY" \
+            --region "$AWS_REGION" \
+            --query 'repositories[0].imageTagMutability' \
+            --output text)
+
+          test "$MUTABILITY" = "IMMUTABLE"
+
+          echo "ECR tag mutability: $MUTABILITY"
+
+      - name: Verify scan-on-push
+        run: |
+          SCAN=$(aws ecr describe-repositories \
+            --repository-names "$ECR_REPOSITORY" \
+            --region "$AWS_REGION" \
+            --query 'repositories[0].imageScanningConfiguration.scanOnPush' \
+            --output text)
+
+          test "$SCAN" = "True"
+
+          echo "ECR scan-on-push: $SCAN"
+
+      - name: Verify lifecycle governance
+        run: |
+          aws ecr get-lifecycle-policy \
+            --repository-name "$ECR_REPOSITORY" \
+            --region "$AWS_REGION" \
+            --output json
+
+      - name: Verify published artifact
+        run: |
+          aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="$GITHUB_SHA" \
+            --region "$AWS_REGION" \
+            --query 'imageDetails[0].{
+              Tags:imageTags,
+              Digest:imageDigest,
+              Pushed:imagePushedAt,
+              Size:imageSizeInBytes
+            }' \
+            --output table
+
+          echo "=========================================="
+          echo " PROJECT 37 CI/CD PASSED"
+          echo "=========================================="
+          echo "Git SHA: $GITHUB_SHA"
+          echo "Digest:  $DIGEST"
