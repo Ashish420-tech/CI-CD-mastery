@@ -1,0 +1,23 @@
+{{- if .Values.rollout.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.rollout.canary.canaryService }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ include "project-38-app.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: {{ .Values.service.type }}
+
+  selector:
+    app.kubernetes.io/name: {{ include "project-38-app.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+      protocol: TCP
+{{- end }}

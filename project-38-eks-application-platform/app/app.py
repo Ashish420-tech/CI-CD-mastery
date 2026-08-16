@@ -10,7 +10,7 @@ def root():
         application="project-38-helm-app",
         version=os.getenv("APP_VERSION", "1.0.0"),
         environment=os.getenv("APP_ENVIRONMENT", "production"),
-        deployment="helm",
+        deployment="helm-progressive",
     )
 
 
