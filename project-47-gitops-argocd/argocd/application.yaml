@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: project-38-gitops
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: ci-cd-mastery
+    project: project-47
+    managed-by: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/Ashish420-tech/CI-CD-mastery.git
+    targetRevision: project-47-gitops-argocd
+    path: project-38-eks-application-platform/chart/project-38-app
+
+    helm:
+      releaseName: project-38
+
+      parameters:
+        - name: image.repository
+          value: 742820980479.dkr.ecr.ap-south-1.amazonaws.com/ci-cd-mastery/applications
+
+        - name: image.digest
+          value: sha256:90e4b7e35b5b4c2644550dbc08c1ca257d37453874aeb06f8b585241884ed98f
+
+        - name: image.pullPolicy
+          value: IfNotPresent
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: project-38
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+
+    syncOptions:
+      - CreateNamespace=false
+      - PruneLast=true
+
+  revisionHistoryLimit: 10
