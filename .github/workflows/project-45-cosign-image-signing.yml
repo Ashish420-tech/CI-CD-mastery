@@ -79,6 +79,15 @@ jobs:
       id-token: write
 
     steps:
+      - name: Configure AWS through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3.9.0
 
@@ -130,6 +139,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Configure AWS through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3.9.0
