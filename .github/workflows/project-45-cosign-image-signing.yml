@@ -1,0 +1,115 @@
+name: Project 45 - Cosign Image Signing
+
+on:
+  push:
+    branches:
+      - project-45-cosign-image-signing
+    paths:
+      - 'project-45-cosign-image-signing/**'
+      - '.github/workflows/project-45-cosign-image-signing.yml'
+      - '.github/workflows/reusable-build-push.yml'
+  pull_request:
+    branches:
+      - project-45-cosign-image-signing
+    paths:
+      - 'project-45-cosign-image-signing/**'
+      - '.github/workflows/project-45-cosign-image-signing.yml'
+      - '.github/workflows/reusable-build-push.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build and Push Image
+    uses: ./.github/workflows/reusable-build-push.yml
+    with:
+      image_name: ci-cd-mastery/applications
+    secrets: inherit
+
+  sign:
+    name: Cosign Keyless Image Signing
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.9.0
+
+      - name: Sign immutable image digest
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          echo "=============================================="
+          echo "PROJECT 45 — COSIGN IMAGE SIGNING"
+          echo "=============================================="
+
+          echo
+          echo "Image:"
+          echo "${IMAGE}"
+
+          echo
+          echo "Digest:"
+          echo "${DIGEST}"
+
+          IMAGE_DIGEST="${IMAGE%@*}@${DIGEST}"
+
+          echo
+          echo "Signing immutable reference:"
+          echo "${IMAGE_DIGEST}"
+
+          cosign sign \
+            --yes \
+            "${IMAGE_DIGEST}"
+
+          echo
+          echo "=============================================="
+          echo "COSIGN SIGNING: PASS"
+          echo "=============================================="
+
+  verify:
+    name: Verify Signed Image
+    needs:
+      - build
+      - sign
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.9.0
+
+      - name: Verify immutable image signature
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          IMAGE_DIGEST="${IMAGE%@*}@${DIGEST}"
+
+          echo "=============================================="
+          echo "PROJECT 45 — SIGNATURE VERIFICATION"
+          echo "=============================================="
+
+          ./project-45-cosign-image-signing/scripts/verify-cosign.sh \
+            "${IMAGE_DIGEST}"
+
+          echo
+          echo "=============================================="
+          echo "PROJECT 45 COSIGN SECURITY GATE: PASS"
+          echo "=============================================="
