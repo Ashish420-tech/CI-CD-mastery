@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: project-39-identity-test
+  namespace: project-39
+spec:
+  serviceAccountName: project-39-app
+  automountServiceAccountToken: false
+  restartPolicy: Never
+
+  containers:
+    - name: aws-cli
+      image: public.ecr.aws/aws-cli/aws-cli:2.27.49
+      command:
+        - /bin/sh
+        - -c
+        - |
+          echo "===== AWS CALLER IDENTITY ====="
+          aws sts get-caller-identity
+          echo
+          echo "===== IDENTITY TEST PASSED ====="
