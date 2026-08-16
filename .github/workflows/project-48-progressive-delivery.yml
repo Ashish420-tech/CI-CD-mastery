@@ -1,0 +1,92 @@
+name: Project 48 - Progressive Delivery
+
+on:
+  push:
+    branches:
+      - project-48-progressive-delivery
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build and Push Version B
+    uses: ./.github/workflows/reusable-build-push.yml
+    secrets: inherit
+    with:
+      image_name: ci-cd-mastery/applications
+      dockerfile: project-38-eks-application-platform/app/Dockerfile
+      context: project-38-eks-application-platform/app
+
+  verify:
+    name: Verify Immutable ECR Image
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Configure AWS through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      - name: Verify immutable image
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          IMAGE_DIGEST="${IMAGE%@*}@${DIGEST}"
+
+          echo "=============================================="
+          echo "PROJECT 48 — IMMUTABLE IMAGE"
+          echo "=============================================="
+          echo
+          echo "Image:"
+          echo "$IMAGE"
+          echo
+          echo "Digest:"
+          echo "$DIGEST"
+          echo
+          echo "Immutable image:"
+          echo "$IMAGE_DIGEST"
+
+          test -n "$DIGEST"
+          [[ "$DIGEST" == sha256:* ]]
+
+          echo
+          echo "Immutable ECR digest: PASS"
+
+      - name: Verify ECR image metadata
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          IMAGE_TAG="${IMAGE##*:}"
+
+          aws ecr describe-images \
+            --repository-name ci-cd-mastery/applications \
+            --image-ids imageTag="$IMAGE_TAG" \
+            --region ap-south-1 \
+            --query 'imageDetails[0].{Tags:imageTags,Digest:imageDigest,Pushed:imagePushedAt}' \
+            --output table
+
+          ECR_DIGEST="$(aws ecr describe-images \
+            --repository-name ci-cd-mastery/applications \
+            --image-ids imageTag="$IMAGE_TAG" \
+            --region ap-south-1 \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+
+          test "$ECR_DIGEST" = "$DIGEST"
+
+          echo
+          echo "ECR digest matches build output: PASS"
