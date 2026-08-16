@@ -1,0 +1,175 @@
+name: Project 46 - SBOM Supply Chain Attestation
+
+on:
+  push:
+    branches:
+      - project-46-sbom-supply-chain
+    paths:
+      - 'project-46-sbom-supply-chain/**'
+      - '.github/workflows/project-46-sbom-supply-chain.yml'
+      - '.github/workflows/reusable-build-push.yml'
+  pull_request:
+    branches:
+      - project-46-sbom-supply-chain
+    paths:
+      - 'project-46-sbom-supply-chain/**'
+      - '.github/workflows/project-46-sbom-supply-chain.yml'
+      - '.github/workflows/reusable-build-push.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: ci-cd-mastery/applications
+  ECR_REGISTRY: 742820980479.dkr.ecr.ap-south-1.amazonaws.com
+
+jobs:
+  build:
+    name: Build and Push Image
+    uses: ./.github/workflows/reusable-build-push.yml
+    with:
+      image_name: ci-cd-mastery/applications
+      dockerfile: project-38-eks-application-platform/app/Dockerfile
+      context: project-38-eks-application-platform/app
+    secrets: inherit
+
+  sbom:
+    name: Generate SBOM and Attest Image
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Configure AWS through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0.20.3
+        with:
+          syft-version: v1.31.0
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.9.0
+
+      - name: Pull immutable image
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          IMAGE_DIGEST="${IMAGE%@*}@${DIGEST}"
+
+          echo "Immutable image:"
+          echo "$IMAGE_DIGEST"
+
+          docker pull "$IMAGE_DIGEST"
+
+      - name: Generate SPDX SBOM
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          IMAGE_DIGEST="${IMAGE%@*}@${DIGEST}"
+
+          syft "$IMAGE_DIGEST" \
+            -o spdx-json=sbom.spdx.json
+
+          test -s sbom.spdx.json
+
+          echo
+          echo "SBOM generated:"
+          du -h sbom.spdx.json
+
+          echo
+          echo "SBOM package count:"
+          jq '.packages | length' sbom.spdx.json
+
+      - name: Attest SBOM to immutable image
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          IMAGE_DIGEST="${IMAGE%@*}@${DIGEST}"
+
+          echo "Attesting SBOM to:"
+          echo "$IMAGE_DIGEST"
+
+          cosign attest \
+            --yes \
+            --predicate sbom.spdx.json \
+            --type spdxjson \
+            "$IMAGE_DIGEST"
+
+          echo
+          echo "=============================================="
+          echo "SBOM ATTESTATION: PASS"
+          echo "=============================================="
+
+  verify:
+    name: Verify SBOM Attestation
+    needs:
+      - build
+      - sbom
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Configure AWS through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.9.0
+
+      - name: Verify SBOM attestation
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          IMAGE_DIGEST="${IMAGE%@*}@${DIGEST}"
+
+          echo "=============================================="
+          echo "PROJECT 46 — SBOM ATTESTATION VERIFICATION"
+          echo "=============================================="
+
+          echo
+          echo "Immutable image:"
+          echo "$IMAGE_DIGEST"
+
+          cosign verify-attestation \
+            --type spdxjson \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --certificate-identity-regexp \
+              "^https://github.com/Ashish420-tech/CI-CD-mastery/.github/workflows/project-46-sbom-supply-chain.yml@refs/heads/project-46-sbom-supply-chain$" \
+            "$IMAGE_DIGEST"
+
+          echo
+          echo "=============================================="
+          echo "PROJECT 46 SBOM SECURITY GATE: PASS"
+          echo "=============================================="
