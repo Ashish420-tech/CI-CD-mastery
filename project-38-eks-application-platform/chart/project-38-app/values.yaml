@@ -22,3 +22,20 @@ resources:
   limits:
     cpu: 500m
     memory: 256Mi
+
+
+rollout:
+  enabled: true
+
+  canary:
+    stableService: project-38
+    canaryService: project-38-canary
+
+    steps:
+      - setWeight: 10
+      - pause: {}
+      - setWeight: 25
+      - pause: {}
+      - setWeight: 50
+      - pause: {}
+      - setWeight: 100

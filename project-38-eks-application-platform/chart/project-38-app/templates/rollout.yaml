@@ -1,5 +1,6 @@
-apiVersion: apps/v1
-kind: Deployment
+{{- if .Values.rollout.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
   name: {{ include "project-38-app.fullname" . }}
   namespace: {{ .Release.Namespace }}
@@ -7,17 +8,23 @@ metadata:
     app.kubernetes.io/name: {{ include "project-38-app.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: Helm
+
 spec:
   replicas: {{ .Values.replicaCount }}
+
+  revisionHistoryLimit: 10
+
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ include "project-38-app.name" . }}
       app.kubernetes.io/instance: {{ .Release.Name }}
+
   template:
     metadata:
       labels:
         app.kubernetes.io/name: {{ include "project-38-app.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
+
     spec:
       automountServiceAccountToken: false
 
@@ -27,7 +34,9 @@ spec:
 
       containers:
         - name: application
+
           image: "{{ .Values.image.repository }}{{ if .Values.image.digest }}@{{ .Values.image.digest }}{{ else }}:{{ .Values.image.tag }}{{ end }}"
+
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
           securityContext:
@@ -67,3 +76,18 @@ spec:
 
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+
+  strategy:
+    canary:
+      stableService: {{ .Values.rollout.canary.stableService }}
+      canaryService: {{ .Values.rollout.canary.canaryService }}
+
+      steps:
+{{- range .Values.rollout.canary.steps }}
+{{- if hasKey . "setWeight" }}
+        - setWeight: {{ .setWeight }}
+{{- else if hasKey . "pause" }}
+        - pause: {}
+{{- end }}
+{{- end }}
+{{- end }}
