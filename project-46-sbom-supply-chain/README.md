@@ -201,6 +201,6 @@ The final CI pipeline must demonstrate:
 ✓ GitHub Actions security gate passed
 Status
 
-Project 46 — Implementation in progress.
+Project 46 — CI validation in progress.
 
-README will be finalized after successful CI validation.
+README will be finalized after successful SBOM attestation and verification.
