@@ -152,7 +152,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          IMAGE_DIGEST="${IMAGE%@*}@${DIGEST}"
+          IMAGE_REPOSITORY="${IMAGE%@*}"
+          IMAGE_REPOSITORY="${IMAGE_REPOSITORY%:*}"
+          IMAGE_DIGEST="${IMAGE_REPOSITORY}@${DIGEST}"
 
           echo "=============================================="
           echo "PROJECT 46 — SBOM ATTESTATION VERIFICATION"
@@ -162,7 +164,7 @@ jobs:
           echo "Immutable image:"
           echo "$IMAGE_DIGEST"
 
-          cosign verify-attestation \
+          timeout 300s cosign verify-attestation \
             --type spdxjson \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             --certificate-identity-regexp \
