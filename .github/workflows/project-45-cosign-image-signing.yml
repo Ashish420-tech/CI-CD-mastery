@@ -65,6 +65,8 @@ jobs:
     uses: ./.github/workflows/reusable-build-push.yml
     with:
       image_name: ci-cd-mastery/applications
+      dockerfile: project-38-eks-application-platform/app/Dockerfile
+      context: project-38-eks-application-platform/app
     secrets: inherit
 
   sign:
