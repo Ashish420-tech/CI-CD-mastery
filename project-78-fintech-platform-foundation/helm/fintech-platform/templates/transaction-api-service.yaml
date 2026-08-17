@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: transaction-api
+  namespace: {{ .Values.namespaces.application }}
+  labels:
+    app.kubernetes.io/name: transaction-api
+    app.kubernetes.io/component: transaction-ingestion
+    app.kubernetes.io/part-of: fintech-platform
+spec:
+  type: ClusterIP
+
+  selector:
+    app.kubernetes.io/name: transaction-api
+
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

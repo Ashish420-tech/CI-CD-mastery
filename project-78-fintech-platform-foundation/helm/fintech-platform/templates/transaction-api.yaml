@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-api
+  namespace: {{ .Values.namespaces.application }}
+  labels:
+    app.kubernetes.io/name: transaction-api
+    app.kubernetes.io/component: transaction-ingestion
+    app.kubernetes.io/part-of: fintech-platform
+spec:
+  replicas: {{ .Values.transactionApi.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: transaction-api
+
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: transaction-api
+        app.kubernetes.io/component: transaction-ingestion
+        app.kubernetes.io/part-of: fintech-platform
+
+    spec:
+      serviceAccountName: transaction-api
+
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: transaction-api
+          image: "{{ .Values.transactionApi.image.repository }}:{{ .Values.transactionApi.image.tag }}"
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          env:
+            - name: SERVICE_NAME
+              value: "transaction-api"
+
+            - name: SERVICE_VERSION
+              value: "{{ .Values.transactionApi.image.tag }}"
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          resources:
+            requests:
+              cpu: {{ .Values.transactionApi.resources.requests.cpu | quote }}
+              memory: {{ .Values.transactionApi.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.transactionApi.resources.limits.cpu | quote }}
+              memory: {{ .Values.transactionApi.resources.limits.memory | quote }}
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
