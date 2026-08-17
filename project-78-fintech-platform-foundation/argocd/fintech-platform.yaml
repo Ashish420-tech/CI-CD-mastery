@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fintech-platform
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/Ashish420-tech/CI-CD-mastery.git
+    targetRevision: main
+    path: project-78-fintech-platform-foundation/helm/fintech-platform
+
+    helm:
+      releaseName: fintech-platform
+
+  destination:
+    server: https://kubernetes.default.svc
+
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true

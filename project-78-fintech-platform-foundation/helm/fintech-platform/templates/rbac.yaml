@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: transaction-api
+  namespace: {{ .Values.namespaces.application }}
+  labels:
+    app.kubernetes.io/name: transaction-api
+    app.kubernetes.io/part-of: fintech-platform
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fraud-api
+  namespace: {{ .Values.namespaces.application }}
+  labels:
+    app.kubernetes.io/name: fraud-api
+    app.kubernetes.io/part-of: fintech-platform
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: feature-service
+  namespace: {{ .Values.namespaces.application }}
+  labels:
+    app.kubernetes.io/name: feature-service
+    app.kubernetes.io/part-of: fintech-platform
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: decision-engine
+  namespace: {{ .Values.namespaces.application }}
+  labels:
+    app.kubernetes.io/name: decision-engine
+    app.kubernetes.io/part-of: fintech-platform
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: data-services
+  namespace: {{ .Values.namespaces.data }}
+  labels:
+    app.kubernetes.io/name: data-services
+    app.kubernetes.io/part-of: fintech-platform
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault
+  namespace: {{ .Values.namespaces.security }}
+  labels:
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/part-of: fintech-platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: transaction-api-reader
+  namespace: {{ .Values.namespaces.application }}
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: transaction-api-reader
+  namespace: {{ .Values.namespaces.application }}
+subjects:
+  - kind: ServiceAccount
+    name: transaction-api
+    namespace: {{ .Values.namespaces.application }}
+roleRef:
+  kind: Role
+  name: transaction-api-reader
+  apiGroup: rbac.authorization.k8s.io

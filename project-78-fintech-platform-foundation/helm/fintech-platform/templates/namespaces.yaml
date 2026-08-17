@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespaces.application }}
+  labels:
+    platform: fintech
+    environment: {{ .Values.platform.environment }}
+    workload: transaction-platform
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespaces.data }}
+  labels:
+    platform: fintech
+    environment: {{ .Values.platform.environment }}
+    workload: data-platform
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespaces.security }}
+  labels:
+    platform: fintech
+    environment: {{ .Values.platform.environment }}
+    workload: security
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespaces.observability }}
+  labels:
+    platform: fintech
+    environment: {{ .Values.platform.environment }}
+    workload: observability
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

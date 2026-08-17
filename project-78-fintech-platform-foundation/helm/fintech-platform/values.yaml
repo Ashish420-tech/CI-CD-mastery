@@ -1,0 +1,9 @@
+platform:
+  name: fintech-platform
+  environment: production-inspired
+
+namespaces:
+  application: fintech
+  data: fintech-data
+  security: fintech-security
+  observability: fintech-observability

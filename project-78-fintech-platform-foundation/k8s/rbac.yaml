@@ -1,0 +1,28 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: transaction-api-reader
+  namespace: fintech
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: transaction-api-reader
+  namespace: fintech
+subjects:
+  - kind: ServiceAccount
+    name: transaction-api
+    namespace: fintech
+roleRef:
+  kind: Role
+  name: transaction-api-reader
+  apiGroup: rbac.authorization.k8s.io
