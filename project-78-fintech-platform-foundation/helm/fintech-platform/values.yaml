@@ -7,3 +7,18 @@ namespaces:
   data: fintech-data
   security: fintech-security
   observability: fintech-observability
+
+transactionApi:
+  replicas: 2
+
+  image:
+    repository: 742820980479.dkr.ecr.ap-south-1.amazonaws.com/ci-cd-mastery/applications
+    tag: fintech-transaction-api-0.1.0
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
